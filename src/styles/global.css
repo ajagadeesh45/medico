@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&family=Noto+Sans+Tamil:wght@400;600;700&display=swap');
+
+:root {
+  --navy:    #0A2F6E;
+  --navy2:   #0D3B8A;
+  --green:   #00C896;
+  --green2:  #00A878;
+  --red:     #FF4757;
+  --orange:  #FF6B35;
+  --bg:      #F4F8FF;
+  --white:   #FFFFFF;
+  --gray1:   #EEF2FF;
+  --gray2:   #D1D8F0;
+  --gray3:   #9BA8C9;
+  --gray4:   #5A6A8A;
+  --text:    #0D1B3E;
+  --font-h:  'Syne', sans-serif;
+  --font-b:  'DM Sans', sans-serif;
+  --font-t:  'Noto Sans Tamil', sans-serif;
+  --radius:  20px;
+  --radius2: 14px;
+  --shadow:  0 4px 24px rgba(10,47,110,0.12);
+  --shadow2: 0 2px 12px rgba(10,47,110,0.08);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #0A2F6E;
+}
+
+body {
+  font-family: var(--font-b);
+  color: var(--text);
+  font-size: 15px;
+}
+
+/* ── APP SHELL ── */
+#root {
+  width: 100%;
+  max-width: 420px;
+  height: 100dvh;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── SCROLLABLE AREA ── */
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 80px;
+}
+.scroll::-webkit-scrollbar { display: none; }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0)    rotate(-2deg); }
+  50%       { transform: translateY(-10px) rotate(2deg); }
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 0 0    rgba(255,71,87,0.4); }
+  50%       { box-shadow: 0 0 0 16px rgba(255,71,87,0);   }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.06); }
+}
+
+/* ── BUTTON BASE ── */
+button {
+  cursor: pointer;
+  font-family: var(--font-b);
+  transition: transform 0.15s;
+}
+button:active { transform: scale(0.96); }
