@@ -1,14 +1,6 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 
 export default function SplashScreen({ navigate }) {
-
-  // Auto navigate to auth after 3 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      navigate('auth');
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [navigate]);
 
   const styles = {
     screen: {
@@ -25,7 +17,6 @@ export default function SplashScreen({ navigate }) {
       padding:        '40px 32px',
       animation:      'fadeIn 0.4s ease',
     },
-    // Background decorative circles
     circle1: {
       position:     'absolute',
       width:        '400px',
@@ -60,12 +51,12 @@ export default function SplashScreen({ navigate }) {
       backdropFilter: 'blur(10px)',
     },
     brand: {
-      fontFamily:  "'Syne', sans-serif",
-      fontSize:    '48px',
-      fontWeight:  '800',
-      color:       '#fff',
+      fontFamily:    "'Syne', sans-serif",
+      fontSize:      '48px',
+      fontWeight:    '800',
+      color:         '#fff',
       letterSpacing: '-2px',
-      marginTop:   '8px',
+      marginTop:     '8px',
     },
     brandGreen: {
       color: '#00C896',
@@ -99,19 +90,19 @@ export default function SplashScreen({ navigate }) {
       color:        'rgba(255,255,255,0.7)',
     },
     btn: {
-      width:        '100%',
-      maxWidth:     '280px',
-      padding:      '18px',
-      background:   '#00C896',
-      color:        '#fff',
-      border:       'none',
-      borderRadius: '16px',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '18px',
-      fontWeight:   '800',
-      cursor:       'pointer',
-      marginTop:    '16px',
-      boxShadow:    '0 8px 32px rgba(0,200,150,0.4)',
+      width:         '100%',
+      maxWidth:      '280px',
+      padding:       '18px',
+      background:    '#00C896',
+      color:         '#fff',
+      border:        'none',
+      borderRadius:  '16px',
+      fontFamily:    "'Syne', sans-serif",
+      fontSize:      '18px',
+      fontWeight:    '800',
+      cursor:        'pointer',
+      marginTop:     '16px',
+      boxShadow:     '0 8px 32px rgba(0,200,150,0.4)',
       letterSpacing: '0.3px',
     },
     loginText: {
@@ -123,42 +114,20 @@ export default function SplashScreen({ navigate }) {
       color:      '#00C896',
       fontWeight: '600',
     },
-    // Loading dots
-    dotsRow: {
-      display:    'flex',
-      gap:        '8px',
-      marginTop:  '8px',
-    },
-    dot: {
-      width:        '8px',
-      height:       '8px',
-      background:   'rgba(255,255,255,0.3)',
-      borderRadius: '50%',
-    },
-    dotActive: {
-      width:        '8px',
-      height:       '8px',
-      background:   '#00C896',
-      borderRadius: '50%',
-    },
   };
 
   return (
     <div style={styles.screen}>
 
-      {/* Background circles */}
-      <div style={styles.circle1} />
-      <div style={styles.circle2} />
+      <div style={styles.circle1}/>
+      <div style={styles.circle2}/>
 
-      {/* Logo */}
       <div style={styles.logoBox}>🏥</div>
 
-      {/* Brand name */}
       <div style={styles.brand}>
         Medi<span style={styles.brandGreen}>co</span>
       </div>
 
-      {/* Tagline */}
       <div style={styles.tagline}>
         Your Doctor. Anywhere. Anytime.
       </div>
@@ -166,15 +135,14 @@ export default function SplashScreen({ navigate }) {
         உங்கள் மருத்துவர். எங்கும். எப்போதும்.
       </div>
 
-      {/* Feature pills */}
       <div style={styles.pillsRow}>
-        <div style={styles.pill}>🌍 Worldwide Doctors</div>
+        <div style={styles.pill}>🌍 Verified Doctors</div>
         <div style={styles.pill}>🤖 AI Symptom Check</div>
         <div style={styles.pill}>🗺️ Hospital Map</div>
-        <div style={styles.pill}>✅ Verified Only</div>
+        <div style={styles.pill}>🚨 Emergency SOS</div>
       </div>
 
-      {/* Get Started button */}
+      {/* ── Only navigates on click ── */}
       <button
         style={styles.btn}
         onClick={() => navigate('auth')}
@@ -182,20 +150,12 @@ export default function SplashScreen({ navigate }) {
         Get Started →
       </button>
 
-      {/* Login link */}
       <div
         style={styles.loginText}
         onClick={() => navigate('auth')}
       >
         Already have an account?{' '}
         <span style={styles.loginSpan}>Login</span>
-      </div>
-
-      {/* Loading dots */}
-      <div style={styles.dotsRow}>
-        <div style={styles.dotActive} />
-        <div style={styles.dot} />
-        <div style={styles.dot} />
       </div>
 
     </div>

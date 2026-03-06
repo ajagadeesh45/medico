@@ -1,81 +1,103 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// ── Initialize Gemini ──
+const genAI = new GoogleGenerativeAI(
+  process.env.REACT_APP_GEMINI_KEY
+);
+
+const SYSTEM_PROMPT = `You are Medico AI, a helpful medical assistant for Indian patients. 
+
+Rules:
+1. Always respond in the same language the user writes in (Tamil or English)
+2. Give practical first aid advice for common symptoms
+3. Always recommend seeing a real doctor for serious symptoms
+4. Keep responses short and clear — max 5 lines
+5. If symptoms sound serious (chest pain, difficulty breathing, stroke) — immediately say CALL 108
+6. Add relevant emojis to make it friendly
+7. Never diagnose — only suggest and guide
+8. End every response with either "Talk to a Medico Doctor →" or "Call 108 immediately 🚨"
+
+You serve rural and urban patients across Tamil Nadu and India.`;
 
 export default function ChatbotScreen({ navigate, showToast }) {
 
-  const [messages, setMessages]   = useState([
+  const [messages, setMessages] = useState([
     {
       from: 'bot',
-      text: '👋 Hello! I am your Medico AI assistant.\n\nTell me your symptoms and I will help suggest what to do.\n\nRemember: I am not a replacement for a real doctor!',
+      text: '👋 Hello! I am Medico AI.\n\nTell me your symptoms in English or Tamil and I will help you.\n\nநான் தமிழிலும் பதில் சொல்வேன்! 😊',
+      showCTA: false,
     },
   ]);
-  const [input, setInput]         = useState('');
-  const [lang, setLang]           = useState('en');
-  const [isTyping, setIsTyping]   = useState(false);
-  const bottomRef                 = useRef(null);
+  const [input, setInput]       = useState('');
+  const [lang, setLang]         = useState('en');
+  const [isTyping, setIsTyping] = useState(false);
+  const bottomRef               = useRef(null);
+  const chatRef                 = useRef(null);
 
-  // Auto scroll to bottom when new message arrives
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // ── Bot replies based on symptoms ──
-  const botReplies = {
-    fever: {
-      en: '🌡️ I see you have fever.\n\n• Drink plenty of water\n• Take Paracetamol 500mg if temp above 100°F\n• Rest well\n\n⚠️ If fever is above 103°F or lasts more than 3 days please see a doctor immediately.',
-      ta: '🌡️ உங்களுக்கு காய்ச்சல் இருக்கிறது.\n\n• தண்ணீர் அதிகமாக குடிக்கவும்\n• Paracetamol எடுக்கவும்\n\n⚠️ 3 நாட்களுக்கு மேல் இருந்தால் மருத்துவரை சந்தியுங்கள்.',
-    },
-    headache: {
-      en: '🤕 Headaches can have many causes.\n\n• Drink water — dehydration is common cause\n• Rest in a dark quiet room\n• Try Paracetamol for mild pain\n\n⚠️ If severe or sudden please consult a doctor immediately.',
-      ta: '🤕 தலைவலிக்கு பல காரணங்கள் இருக்கலாம்.\n\n• தண்ணீர் குடியுங்கள்\n• ஓய்வெடுங்கள்\n• தீவிரமாக இருந்தால் மருத்துவரை பாருங்கள்.',
-    },
-    chest: {
-      en: '❤️ Chest pain needs immediate attention!\n\n⚠️ Please go to emergency NOW if:\n• Pain is severe or crushing\n• Spreading to arm or jaw\n• You are short of breath\n\nDo NOT ignore chest pain.',
-      ta: '❤️ மார்பு வலி உடனடியாக கவனிக்க வேண்டும்!\n\n⚠️ 108 அழைக்கவும் அல்லது உடனே மருத்துவமனை செல்லுங்கள்.',
-    },
-    dizzy: {
-      en: '😵 Dizziness can be caused by:\n\n• Low blood pressure — sit down slowly\n• Dehydration — drink water\n• Low blood sugar — eat something\n\n⚠️ If dizziness is severe or frequent please see a doctor.',
-      ta: '😵 தலைசுற்றல் ஏற்பட்டால்:\n\n• மெதுவாக உட்காருங்கள்\n• தண்ணீர் குடியுங்கள்\n• சாப்பிடுங்கள்',
-    },
-    cough: {
-      en: '🤧 For cough and cold:\n\n• Drink warm water with honey\n• Steam inhalation helps\n• Rest well\n• Avoid cold drinks and ice cream\n\n⚠️ If cough lasts more than 2 weeks see a doctor.',
-      ta: '🤧 இருமல் மற்றும் சளிக்கு:\n\n• தேனுடன் சூடான தண்ணீர் குடிக்கவும்\n• ஆவி பிடிக்கவும்\n• குளிர்ந்த உணவுகளை தவிர்க்கவும்',
-    },
-    default: {
-      en: '🩺 I understand. Based on what you said I suggest consulting one of our verified doctors for proper diagnosis.\n\nWould you like to talk to a doctor now?',
-      ta: '🩺 நான் புரிந்துகொள்கிறேன். சரியான கண்டறிதலுக்கு எங்கள் மருத்துவரை தொடர்பு கொள்ளுங்கள்.',
-    },
-  };
+  // ── Send to Gemini AI ──
+  const askGemini = async (userText) => {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+      });
 
-  // ── Get bot reply based on input ──
-  const getBotReply = (text) => {
-    const t = text.toLowerCase();
-    if (t.includes('fever') || t.includes('காய்ச்சல்'))        return botReplies.fever[lang];
-    if (t.includes('head')  || t.includes('தலைவலி'))           return botReplies.headache[lang];
-    if (t.includes('chest') || t.includes('மார்பு'))           return botReplies.chest[lang];
-    if (t.includes('dizz')  || t.includes('தலைசுற்றல்'))       return botReplies.dizzy[lang];
-    if (t.includes('cough') || t.includes('cold') ||
-        t.includes('இருமல்'))                                   return botReplies.cough[lang];
-    return botReplies.default[lang];
+      // Build conversation history
+      const history = messages
+        .filter(m => m.from === 'user' || (m.from === 'bot' && m.text))
+        .slice(-6) // last 6 messages for context
+        .map(m => ({
+          role:  m.from === 'user' ? 'user' : 'model',
+          parts: [{ text: m.text }],
+        }));
+
+      const chat = model.startChat({
+        history,
+        generationConfig: { maxOutputTokens: 300 },
+      });
+
+      const fullPrompt = SYSTEM_PROMPT + '\n\nUser says: ' + userText;
+      const result = await chat.sendMessage(fullPrompt);
+      return result.response.text();
+
+    } catch (err) {
+      console.error('Gemini error:', err);
+      return '⚠️ AI is busy right now. Please try again or talk to a real doctor.';
+    }
   };
 
   // ── Send message ──
-  const sendMessage = (text) => {
+  const sendMessage = async (text) => {
     if (!text.trim()) return;
+    if (isTyping) return;
 
     // Add user message
     setMessages(prev => [...prev, { from: 'user', text }]);
     setInput('');
     setIsTyping(true);
 
-    // Simulate bot typing delay
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages(prev => [
-        ...prev,
-        { from: 'bot', text: getBotReply(text), showCTA: true },
-      ]);
-    }, 1200);
+    // Get AI response
+    const reply = await askGemini(text);
+
+    setIsTyping(false);
+    setMessages(prev => [
+      ...prev,
+      { from: 'bot', text: reply, showCTA: true },
+    ]);
   };
+
+  const quickReplies = [
+    '🌡️ I have fever',
+    '🤕 Headache',
+    '❤️ Chest pain',
+    '😵 Feeling dizzy',
+    '🤧 Cough & cold',
+    '🤒 Body pain',
+  ];
 
   const styles = {
     screen: {
@@ -87,16 +109,15 @@ export default function ChatbotScreen({ navigate, showToast }) {
       flexDirection: 'column',
       background:    '#F0F4FF',
     },
-    // Header
     header: {
-      background: 'linear-gradient(135deg, #0A2F6E, #0D3B8A)',
-      padding:    '16px 20px',
-      display:    'flex',
-      alignItems: 'center',
-      gap:        '12px',
-      flexShrink: '0',
+      background:  'linear-gradient(135deg, #0A2F6E, #0D3B8A)',
+      padding:     '16px 20px',
+      display:     'flex',
+      alignItems:  'center',
+      gap:         '12px',
+      flexShrink:  '0',
     },
-    botAvatar: {
+    botAva: {
       width:          '44px',
       height:         '44px',
       background:     '#00C896',
@@ -119,9 +140,9 @@ export default function ChatbotScreen({ navigate, showToast }) {
       marginTop: '2px',
     },
     langPills: {
-      display:     'flex',
-      gap:         '6px',
-      marginLeft:  'auto',
+      display:    'flex',
+      gap:        '6px',
+      marginLeft: 'auto',
     },
     langPill: {
       padding:      '5px 10px',
@@ -143,14 +164,11 @@ export default function ChatbotScreen({ navigate, showToast }) {
       cursor:       'pointer',
       background:   'rgba(255,255,255,0.15)',
     },
-    // Chat body
     chatBody: {
-      flex:                    '1',
-      overflowY:               'auto',
-      padding:                 '16px',
-      WebkitOverflowScrolling: 'touch',
+      flex:      '1',
+      overflowY: 'auto',
+      padding:   '16px',
     },
-    // Messages
     msgBot: {
       display:       'flex',
       flexDirection: 'column',
@@ -164,18 +182,18 @@ export default function ChatbotScreen({ navigate, showToast }) {
       marginBottom:  '14px',
     },
     bubbleBot: {
-      maxWidth:     '80%',
+      maxWidth:     '82%',
       padding:      '12px 16px',
       borderRadius: '4px 18px 18px 18px',
       background:   '#fff',
       color:        '#0D1B3E',
       fontSize:     '14px',
       lineHeight:   '1.6',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
+      boxShadow:    '0 2px 8px rgba(10,47,110,0.08)',
       whiteSpace:   'pre-line',
     },
     bubbleUser: {
-      maxWidth:     '80%',
+      maxWidth:     '82%',
       padding:      '12px 16px',
       borderRadius: '18px 18px 4px 18px',
       background:   '#0A2F6E',
@@ -184,7 +202,6 @@ export default function ChatbotScreen({ navigate, showToast }) {
       lineHeight:   '1.6',
       whiteSpace:   'pre-line',
     },
-    // Quick reply buttons
     quickReplies: {
       display:   'flex',
       gap:       '8px',
@@ -201,7 +218,6 @@ export default function ChatbotScreen({ navigate, showToast }) {
       color:        '#0A2F6E',
       cursor:       'pointer',
     },
-    // Typing indicator
     typingWrap: {
       display:      'flex',
       gap:          '5px',
@@ -209,7 +225,7 @@ export default function ChatbotScreen({ navigate, showToast }) {
       background:   '#fff',
       borderRadius: '4px 18px 18px 18px',
       width:        'fit-content',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
+      boxShadow:    '0 2px 8px rgba(10,47,110,0.08)',
       marginBottom: '14px',
     },
     typingDot: {
@@ -219,16 +235,18 @@ export default function ChatbotScreen({ navigate, showToast }) {
       borderRadius: '50%',
       animation:    'bounce 0.8s ease-in-out infinite',
     },
-    // Talk to doctor CTA
     cta: {
-      margin:       '0 0 12px',
+      margin:       '4px 0 12px',
       background:   'linear-gradient(135deg, #0A2F6E, #0D3B8A)',
       borderRadius: '16px',
-      padding:      '16px',
+      padding:      '14px 16px',
       display:      'flex',
       alignItems:   'center',
       gap:          '12px',
       cursor:       'pointer',
+      border:       'none',
+      width:        '100%',
+      textAlign:    'left',
     },
     ctaText: {
       fontFamily: "'Syne', sans-serif",
@@ -238,19 +256,18 @@ export default function ChatbotScreen({ navigate, showToast }) {
       flex:       '1',
     },
     ctaSub: {
-      fontSize:  '12px',
+      fontSize:  '11px',
       color:     'rgba(255,255,255,0.55)',
       marginTop: '2px',
     },
-    // Input row
     inputRow: {
-      padding:     '12px 16px',
-      background:  '#fff',
-      borderTop:   '1px solid #EEF2FF',
-      display:     'flex',
-      gap:         '10px',
-      alignItems:  'center',
-      flexShrink:  '0',
+      padding:    '12px 16px',
+      background: '#fff',
+      borderTop:  '1px solid #EEF2FF',
+      display:    'flex',
+      gap:        '10px',
+      alignItems: 'center',
+      flexShrink: '0',
     },
     input: {
       flex:         '1',
@@ -269,33 +286,33 @@ export default function ChatbotScreen({ navigate, showToast }) {
       background:     '#0A2F6E',
       borderRadius:   '50%',
       border:         'none',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
       fontSize:       '18px',
       cursor:         'pointer',
       flexShrink:     '0',
+      display:        'flex',
+      alignItems:     'center',
+      justifyContent: 'center',
+    },
+    disclaimer: {
+      textAlign:  'center',
+      fontSize:   '11px',
+      color:      '#9BA8C9',
+      padding:    '6px 16px 0',
+      flexShrink: '0',
+      background: '#fff',
     },
   };
-
-  const quickReplies = [
-    '🌡️ I have fever',
-    '🤕 I have headache',
-    '❤️ Chest pain',
-    '😵 I feel dizzy',
-    '🤧 Cough & cold',
-  ];
 
   return (
     <div style={styles.screen}>
 
       {/* Header */}
       <div style={styles.header}>
-        <div style={styles.botAvatar}>🤖</div>
+        <div style={styles.botAva}>🤖</div>
         <div>
           <div style={styles.botName}>Medico AI</div>
           <div style={styles.botStatus}>
-            🟢 Always Online • Symptom Checker
+            🟢 Powered by Gemini • Always Online
           </div>
         </div>
         <div style={styles.langPills}>
@@ -305,7 +322,9 @@ export default function ChatbotScreen({ navigate, showToast }) {
           ].map(l => (
             <button
               key={l.code}
-              style={lang === l.code ? styles.langPillActive : styles.langPill}
+              style={lang === l.code
+                ? styles.langPillActive
+                : styles.langPill}
               onClick={() => {
                 setLang(l.code);
                 showToast(l.code === 'ta'
@@ -319,22 +338,23 @@ export default function ChatbotScreen({ navigate, showToast }) {
         </div>
       </div>
 
-      {/* Chat messages */}
-      <div style={styles.chatBody}>
-
+      {/* Chat body */}
+      <div style={styles.chatBody} ref={chatRef}>
         {messages.map((msg, i) => (
           <div key={i}>
-            <div style={msg.from === 'bot' ? styles.msgBot : styles.msgUser}>
-              <div style={
-                msg.from === 'bot'
-                  ? styles.bubbleBot
-                  : styles.bubbleUser
-              }>
+            <div style={msg.from === 'bot'
+              ? styles.msgBot
+              : styles.msgUser}
+            >
+              <div style={msg.from === 'bot'
+                ? styles.bubbleBot
+                : styles.bubbleUser}
+              >
                 {msg.text}
               </div>
             </div>
 
-            {/* Quick replies only on first bot message */}
+            {/* Quick replies on first message */}
             {msg.from === 'bot' && i === 0 && (
               <div style={styles.quickReplies}>
                 {quickReplies.map((qr, j) => (
@@ -349,9 +369,9 @@ export default function ChatbotScreen({ navigate, showToast }) {
               </div>
             )}
 
-            {/* Talk to doctor CTA after bot reply */}
+            {/* Talk to doctor CTA */}
             {msg.from === 'bot' && msg.showCTA && (
-              <div
+              <button
                 style={styles.cta}
                 onClick={() => navigate('doctors')}
               >
@@ -363,10 +383,10 @@ export default function ChatbotScreen({ navigate, showToast }) {
                     Verified doctors available now
                   </div>
                 </div>
-                <span style={{ fontSize: '22px', color: 'rgba(255,255,255,0.6)' }}>
+                <span style={{fontSize:'20px',color:'rgba(255,255,255,0.6)'}}>
                   ›
                 </span>
-              </div>
+              </button>
             )}
           </div>
         ))}
@@ -374,31 +394,30 @@ export default function ChatbotScreen({ navigate, showToast }) {
         {/* Typing indicator */}
         {isTyping && (
           <div style={styles.typingWrap}>
-            {[0, 1, 2].map(i => (
-              <div
-                key={i}
-                style={{
-                  ...styles.typingDot,
-                  animationDelay: `${i * 0.15}s`,
-                }}
-              />
+            {[0,1,2].map(i => (
+              <div key={i} style={{
+                ...styles.typingDot,
+                animationDelay: i * 0.15 + 's',
+              }}/>
             ))}
           </div>
         )}
 
-        {/* Auto scroll anchor */}
-        <div ref={bottomRef} />
+        <div ref={bottomRef}/>
       </div>
 
-      {/* Input row */}
+      {/* Disclaimer */}
+      <div style={styles.disclaimer}>
+        ⚕️ AI advice is not a substitute for professional medical care
+      </div>
+
+      {/* Input */}
       <div style={styles.inputRow}>
         <input
           style={styles.input}
-          placeholder={
-            lang === 'ta'
-              ? 'உங்கள் அறிகுறிகளை தட்டச்சு செய்யுங்கள்...'
-              : 'Type your symptoms...'
-          }
+          placeholder={lang === 'ta'
+            ? 'உங்கள் அறிகுறிகளை தட்டச்சு செய்யுங்கள்...'
+            : 'Type your symptoms...'}
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && sendMessage(input)}

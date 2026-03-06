@@ -1,13 +1,102 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function EmergencyScreen({ goBack, showToast }) {
 
-  const [pressed, setPressed] = useState(false);
+  const [pressed, setPressed]       = useState(false);
+  const [location, setLocation]     = useState(null);
+  const [nearestHosp, setNearestHosp] = useState(null);
+  const [loading, setLoading]       = useState(true);
 
-  const handleEmergency = () => {
+  // ── Get GPS + nearest hospital on load ──
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setLocation({ lat, lng });
+        fetchNearestHospital(lat, lng);
+      },
+      () => {
+        setLoading(false);
+      }
+    );
+  }, []);
+
+  // ── Fetch nearest hospital from OpenStreetMap ──
+  const fetchNearestHospital = (lat, lng) => {
+    const q = '[out:json][timeout:10];node["amenity"="hospital"](around:5000,' + lat + ',' + lng + ');out 1;';
+    fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        if (data.elements && data.elements.length > 0) {
+          const h = data.elements[0];
+          const dist = getDistance(lat, lng, h.lat, h.lon);
+          setNearestHosp({
+            name:  h.tags.name || 'Nearest Hospital',
+            lat:   h.lat,
+            lng:   h.lon,
+            phone: h.tags.phone || h.tags['contact:phone'] || null,
+            dist:  dist,
+          });
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
+
+  // ── Calculate distance ──
+  const getDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lng2 - lng1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1000;
+    return d < 1000
+      ? Math.round(d) + 'm away'
+      : (d/1000).toFixed(1) + 'km away';
+  };
+
+  // ── SOS Button pressed ──
+  const handleSOS = () => {
     setPressed(true);
-    showToast('🚨 Emergency alert sent! Help is on the way.');
+
+    // Immediately call 108
+    window.location.href = 'tel:108';
+
     setTimeout(() => setPressed(false), 3000);
+  };
+
+  // ── Call hospital directly ──
+  const callHospital = () => {
+    if (nearestHosp && nearestHosp.phone) {
+      window.location.href = 'tel:' + nearestHosp.phone;
+    } else {
+      window.location.href = 'tel:108';
+    }
+  };
+
+  // ── Open directions to hospital ──
+  const openDirections = () => {
+    if (nearestHosp) {
+      window.open(
+        'https://www.google.com/maps/dir/?api=1&destination=' +
+        nearestHosp.lat + ',' + nearestHosp.lng,
+        '_blank'
+      );
+    }
+  };
+
+  // ── Call 108 ambulance ──
+  const call108 = () => {
+    window.location.href = 'tel:108';
   };
 
   const styles = {
@@ -21,7 +110,6 @@ export default function EmergencyScreen({ goBack, showToast }) {
       background:     'linear-gradient(160deg, #8B0000 0%, #C0392B 50%, #E74C3C 100%)',
       zIndex:         '50',
     },
-    // Top bar
     topBar: {
       padding:    '16px 20px 14px',
       display:    'flex',
@@ -50,7 +138,6 @@ export default function EmergencyScreen({ goBack, showToast }) {
       color:      '#fff',
       flex:       '1',
     },
-    // Main content
     content: {
       flex:           '1',
       display:        'flex',
@@ -58,9 +145,8 @@ export default function EmergencyScreen({ goBack, showToast }) {
       alignItems:     'center',
       justifyContent: 'center',
       gap:            '16px',
-      padding:        '32px 24px',
+      padding:        '24px',
     },
-    // SOS ring
     ring: {
       position:       'relative',
       width:          '200px',
@@ -84,7 +170,6 @@ export default function EmergencyScreen({ goBack, showToast }) {
       borderRadius: '50%',
       background:   'rgba(255,255,255,0.08)',
     },
-    // SOS button
     sosBtn: {
       width:          '140px',
       height:         '140px',
@@ -98,61 +183,71 @@ export default function EmergencyScreen({ goBack, showToast }) {
       cursor:         'pointer',
       zIndex:         '2',
       border:         'none',
-      boxShadow:      pressed
-        ? '0 0 0 8px rgba(255,255,255,0.3)'
-        : '0 0 0 0 rgba(255,255,255,0.4)',
       transition:     'all 0.2s',
+      boxShadow:      '0 0 32px rgba(255,255,255,0.3)',
     },
-    sosBtnIcon: {
-      fontSize: '44px',
-    },
+    sosBtnIcon:  { fontSize: '44px' },
     sosBtnLabel: {
-      fontSize:   '12px',
+      fontSize:   '11px',
       fontWeight: '800',
       color:      '#C0392B',
       fontFamily: "'Syne', sans-serif",
     },
-    // Text
     title: {
       fontFamily: "'Syne', sans-serif",
-      fontSize:   '26px',
+      fontSize:   '24px',
       fontWeight: '800',
       color:      '#fff',
       textAlign:  'center',
     },
     sub: {
-      color:      'rgba(255,255,255,0.6)',
-      fontSize:   '14px',
+      color:      'rgba(255,255,255,0.65)',
+      fontSize:   '13px',
       textAlign:  'center',
       lineHeight: '1.6',
-      padding:    '0 16px',
     },
-    // Nearest hospital card
+    statusMsg: {
+      background:   'rgba(255,255,255,0.15)',
+      borderRadius: '12px',
+      padding:      '10px 20px',
+      color:        '#fff',
+      fontSize:     '14px',
+      fontWeight:   '600',
+      textAlign:    'center',
+    },
     hospCard: {
-      background:    'rgba(255,255,255,0.12)',
-      borderRadius:  '16px',
-      padding:       '16px',
-      width:         '100%',
-      backdropFilter:'blur(10px)',
-      border:        '1px solid rgba(255,255,255,0.15)',
-    },
-    hospRow: {
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'space-between',
+      background:     'rgba(255,255,255,0.12)',
+      borderRadius:   '16px',
+      padding:        '16px',
+      width:          '100%',
+      border:         '1px solid rgba(255,255,255,0.15)',
     },
     hospName: {
       fontFamily: "'Syne', sans-serif",
-      fontSize:   '16px',
+      fontSize:   '15px',
       fontWeight: '700',
       color:      '#fff',
     },
     hospSub: {
-      fontSize:  '13px',
+      fontSize:  '12px',
       color:     'rgba(255,255,255,0.55)',
-      marginTop: '2px',
+      marginTop: '4px',
     },
-    // Ambulance button
+    hospBtns: {
+      display:   'flex',
+      gap:       '8px',
+      marginTop: '12px',
+    },
+    hospBtn: {
+      flex:         '1',
+      padding:      '10px',
+      borderRadius: '10px',
+      border:       'none',
+      fontFamily:   "'Syne', sans-serif",
+      fontSize:     '13px',
+      fontWeight:   '700',
+      cursor:       'pointer',
+    },
     ambulanceBtn: {
       width:        '100%',
       padding:      '16px',
@@ -164,18 +259,6 @@ export default function EmergencyScreen({ goBack, showToast }) {
       fontWeight:   '800',
       color:        '#fff',
       cursor:       'pointer',
-      backdropFilter: 'blur(10px)',
-    },
-    // Status message when pressed
-    statusMsg: {
-      background:   'rgba(255,255,255,0.15)',
-      borderRadius: '12px',
-      padding:      '12px 20px',
-      color:        '#fff',
-      fontSize:     '14px',
-      fontWeight:   '600',
-      textAlign:    'center',
-      animation:    'fadeIn 0.3s ease',
     },
   };
 
@@ -185,65 +268,75 @@ export default function EmergencyScreen({ goBack, showToast }) {
       {/* Top bar */}
       <div style={styles.topBar}>
         <button style={styles.backBtn} onClick={goBack}>←</button>
-        <div style={styles.topTitle}>Emergency</div>
+        <div style={styles.topTitle}>🚨 Emergency</div>
       </div>
 
-      {/* Main content */}
       <div style={styles.content}>
 
-        {/* SOS Ring & Button */}
+        {/* SOS Ring */}
         <div style={styles.ring}>
           <div style={styles.ringOuter}/>
           <div style={styles.ringInner}/>
-          <button
-            style={styles.sosBtn}
-            onClick={handleEmergency}
-          >
+          <button style={styles.sosBtn} onClick={handleSOS}>
             <span style={styles.sosBtnIcon}>🆘</span>
             <span style={styles.sosBtnLabel}>
-              {pressed ? 'SENDING...' : 'PRESS & HOLD'}
+              {pressed ? 'CALLING 108...' : 'TAP TO CALL'}
             </span>
           </button>
         </div>
 
-        {/* Status message */}
+        {/* Status */}
         {pressed && (
           <div style={styles.statusMsg}>
-            📍 Sharing your location...
+            📞 Calling 108 Ambulance...
           </div>
         )}
 
         {/* Title */}
         <div style={styles.title}>Need Emergency Help?</div>
         <div style={styles.sub}>
-          Press the button to send your location
-          to the nearest hospital and alert your
-          emergency contacts immediately.
+          Tap the SOS button to instantly call{'\n'}
+          108 Free Ambulance Service
         </div>
 
-        {/* Nearest hospital */}
+        {/* Nearest Hospital Card */}
         <div style={styles.hospCard}>
-          <div style={styles.hospRow}>
-            <div>
+          {loading ? (
+            <div style={{color:'rgba(255,255,255,0.7)',fontSize:'14px'}}>
+              📍 Finding nearest hospital...
+            </div>
+          ) : nearestHosp ? (
+            <>
               <div style={styles.hospName}>
-                🏥 City Hospital — 0.3 km
+                🏥 {nearestHosp.name}
               </div>
               <div style={styles.hospSub}>
-                24/7 Emergency • Trauma Center
+                📍 {nearestHosp.dist} • 24/7 Emergency
               </div>
+              <div style={styles.hospBtns}>
+                <button
+                  style={{...styles.hospBtn, background:'#00C896', color:'#fff'}}
+                  onClick={callHospital}
+                >
+                  📞 Call Hospital
+                </button>
+                <button
+                  style={{...styles.hospBtn, background:'rgba(255,255,255,0.2)', color:'#fff'}}
+                  onClick={openDirections}
+                >
+                  🗺️ Directions
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{color:'rgba(255,255,255,0.7)',fontSize:'14px'}}>
+              📍 Enable GPS to find nearest hospital
             </div>
-            <span style={{
-              fontSize: '22px',
-              color: 'rgba(255,255,255,0.5)'
-            }}>›</span>
-          </div>
+          )}
         </div>
 
-        {/* Ambulance button */}
-        <button
-          style={styles.ambulanceBtn}
-          onClick={() => showToast('📞 Calling 108 Ambulance...')}
-        >
+        {/* 108 Ambulance button */}
+        <button style={styles.ambulanceBtn} onClick={call108}>
           📞 Call 108 — Free Ambulance
         </button>
 

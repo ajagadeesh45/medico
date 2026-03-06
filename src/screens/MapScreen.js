@@ -1,356 +1,287 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import BottomNav from '../components/BottomNav';
 
-export default function MapScreen({ navigate, showToast }) {
+const getLabel = (tags) => {
+  if (tags.amenity === 'hospital') return '🏥 Hospital';
+  if (tags.amenity === 'clinic')   return '🏨 Clinic';
+  if (tags.amenity === 'pharmacy') return '💊 Pharmacy';
+  if (tags.amenity === 'doctors')  return '🩺 Doctor';
+  return '🏥 Medical';
+};
 
-  const [selectedPin, setSelectedPin] = useState(null);
+const getColor = (tags) => {
+  if (tags.amenity === 'hospital') return '#0A2F6E';
+  if (tags.amenity === 'clinic')   return '#1565C0';
+  if (tags.amenity === 'pharmacy') return '#FF6B35';
+  if (tags.amenity === 'doctors')  return '#1565C0';
+  return '#00C896';
+};
 
-  const hospitals = [
-    {
-      id:      0,
-      icon:    '🏥',
-      name:    'City Government Hospital',
-      sub:     '0.3 km • 24/7 Emergency • Free',
-      color:   '#0A2F6E',
-      cx:      140,
-      cy:      215,
-    },
-    {
-      id:      1,
-      icon:    '🏨',
-      name:    'Apollo Multi-Speciality Clinic',
-      sub:     '0.7 km • Open • Private',
-      color:   '#1565C0',
-      cx:      295,
-      cy:      230,
-    },
-    {
-      id:      2,
-      icon:    '💊',
-      name:    'MedPlus Pharmacy',
-      sub:     '0.4 km • Open until 10 PM',
-      color:   '#FF6B35',
-      cx:      155,
-      cy:      385,
-    },
-    {
-      id:      3,
-      icon:    '🩺',
-      name:    'Primary Health Centre',
-      sub:     '0.5 km • Government • Free OPD',
-      color:   '#00C896',
-      cx:      360,
-      cy:      265,
-    },
-    {
-      id:      4,
-      icon:    '🚑',
-      name:    'Emergency Trauma Centre',
-      sub:     '0.9 km • 24/7 Ambulance',
-      color:   '#FF4757',
-      cx:      78,
-      cy:      355,
-    },
+const getDist = (lat1, lng1, lat2, lng2) => {
+  const R    = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lng2 - lng1) * Math.PI / 180;
+  const a    =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1000;
+  return d < 1000
+    ? Math.round(d) + 'm away'
+    : (d/1000).toFixed(1) + 'km away';
+};
+
+export default function MapScreen({ navigate }) {
+
+  const mapRef             = useRef(null);
+  const leafletMap         = useRef(null);
+  const [location, setLocation] = useState(null);
+  const [places, setPlaces]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [filter, setFilter]     = useState('all');
+  const [error, setError]       = useState(null);
+
+  const filters = [
+    { id: 'all',      label: 'All'        },
+    { id: 'hospital', label: '🏥 Hospital' },
+    { id: 'clinic',   label: '🏨 Clinic'   },
+    { id: 'pharmacy', label: '💊 Pharmacy' },
   ];
 
-  const styles = {
-    screen: {
-      position:      'fixed',
-      inset:         '0',
-      maxWidth:      '420px',
-      margin:        '0 auto',
-      display:       'flex',
-      flexDirection: 'column',
-      background:    '#F4F8FF',
-    },
-    mapWrap: {
-      flex:     '1',
-      position: 'relative',
-      overflow: 'hidden',
-    },
-    // Search bar on top of map
-    searchWrap: {
-      position: 'absolute',
-      top:      '16px',
-      left:     '16px',
-      right:    '16px',
-      zIndex:   '10',
-      display:  'flex',
-      flexDirection: 'column',
-      gap:      '8px',
-    },
-    searchBox: {
-      background:   '#fff',
-      borderRadius: '14px',
-      padding:      '12px 16px',
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '10px',
-      boxShadow:    '0 4px 24px rgba(10,47,110,0.12)',
-    },
-    searchInput: {
-      flex:       '1',
-      border:     'none',
-      outline:    'none',
-      fontFamily: "'DM Sans', sans-serif",
-      fontSize:   '14px',
-      color:      '#0D1B3E',
-    },
-    // Filter chips
-    chipsRow: {
-      display:   'flex',
-      gap:       '8px',
-      overflowX: 'auto',
-    },
-    chip: {
-      background:   '#fff',
-      borderRadius: '50px',
-      padding:      '7px 14px',
-      fontSize:     '12px',
-      fontWeight:   '700',
-      color:        '#0A2F6E',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
-      whiteSpace:   'nowrap',
-      cursor:       'pointer',
-      border:       '2px solid transparent',
-      flexShrink:   '0',
-    },
-    chipActive: {
-      background:   '#0A2F6E',
-      borderRadius: '50px',
-      padding:      '7px 14px',
-      fontSize:     '12px',
-      fontWeight:   '700',
-      color:        '#fff',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
-      whiteSpace:   'nowrap',
-      cursor:       'pointer',
-      border:       '2px solid transparent',
-      flexShrink:   '0',
-    },
-    // Popup card
-    popup: {
-      position:     'absolute',
-      bottom:       '16px',
-      left:         '16px',
-      right:        '16px',
-      background:   '#fff',
-      borderRadius: '20px',
-      padding:      '18px',
-      boxShadow:    '0 8px 40px rgba(10,47,110,0.18)',
-      zIndex:       '20',
-      animation:    'slideUp 0.25s ease',
-    },
-    popupRow: {
-      display:    'flex',
-      alignItems: 'center',
-      gap:        '12px',
-    },
-    popupIcon: {
-      width:          '48px',
-      height:         '48px',
-      borderRadius:   '14px',
-      background:     '#EEF2FF',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '24px',
-      flexShrink:     '0',
-    },
-    popupName: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '16px',
-      fontWeight: '800',
-      color:      '#0A2F6E',
-    },
-    popupSub: {
-      fontSize:  '12px',
-      color:     '#5A6A8A',
-      marginTop: '2px',
-    },
-    popupBtns: {
-      display:   'flex',
-      gap:       '8px',
-      marginTop: '12px',
-    },
-    btnCall: {
-      flex:         '1',
-      padding:      '11px',
-      borderRadius: '10px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '13px',
-      fontWeight:   '700',
-      cursor:       'pointer',
-      background:   '#00C896',
-      color:        '#fff',
-    },
-    btnDir: {
-      flex:         '1',
-      padding:      '11px',
-      borderRadius: '10px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '13px',
-      fontWeight:   '700',
-      cursor:       'pointer',
-      background:   '#EEF2FF',
-      color:        '#0A2F6E',
-    },
-  };
+  // ── Step 1: Get GPS ──
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocation({ lat: 13.0827, lng: 80.2707 });
+      setError('GPS not available. Showing Chennai.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setLocation({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      }),
+      () => {
+        setLocation({ lat: 13.0827, lng: 80.2707 });
+        setError('Could not get location. Showing Chennai.');
+      }
+    );
+  }, []);
+
+  // ── Step 2: Fetch hospitals ──
+  useEffect(() => {
+    if (!location) return;
+    const { lat, lng } = location;
+    const q =
+      '[out:json][timeout:25];(' +
+      'node["amenity"="hospital"](around:3000,' + lat + ',' + lng + ');' +
+      'node["amenity"="clinic"](around:3000,' + lat + ',' + lng + ');' +
+      'node["amenity"="pharmacy"](around:3000,' + lat + ',' + lng + ');' +
+      'node["amenity"="doctors"](around:3000,' + lat + ',' + lng + ');' +
+      'way["amenity"="hospital"](around:3000,' + lat + ',' + lng + ');' +
+      ');out center max 30;';
+
+    fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        const results = data.elements
+          .filter(el => el.tags && el.tags.name)
+          .map(el => ({
+            id:    el.id,
+            name:  el.tags.name,
+            lat:   el.lat || (el.center && el.center.lat),
+            lng:   el.lon || (el.center && el.center.lon),
+            tags:  el.tags,
+            phone: el.tags.phone || el.tags['contact:phone'] || null,
+          }))
+          .filter(el => el.lat && el.lng);
+        setPlaces(results);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        setError('Could not load hospitals. Check internet.');
+      });
+  }, [location]);
+
+  // ── Step 3: Init Leaflet map directly ──
+  useEffect(() => {
+    if (!location || !mapRef.current) return;
+
+    // Load Leaflet CSS dynamically
+    if (!document.getElementById('leaflet-css')) {
+      const link  = document.createElement('link');
+      link.id     = 'leaflet-css';
+      link.rel    = 'stylesheet';
+      link.href   = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    // Load Leaflet JS dynamically
+    const initMap = () => {
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
+
+      const L   = window.L;
+      const map = L.map(mapRef.current, { zoomControl: false }).setView(
+        [location.lat, location.lng], 15
+      );
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+      }).addTo(map);
+
+      // Your location circle
+      L.circle([location.lat, location.lng], {
+        radius:      80,
+        color:       '#0A2F6E',
+        fillColor:   '#0A2F6E',
+        fillOpacity: 0.4,
+      }).addTo(map);
+
+      leafletMap.current = map;
+    };
+
+    if (window.L) {
+      initMap();
+    } else {
+      const script    = document.createElement('script');
+      script.src      = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload   = initMap;
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
+    };
+  }, [location]);
+
+  // ── Step 4: Add markers when places load ──
+  useEffect(() => {
+    if (!leafletMap.current || !window.L || places.length === 0) return;
+    const L        = window.L;
+    const map      = leafletMap.current;
+    const filtered = filter === 'all'
+      ? places
+      : places.filter(p => p.tags && p.tags.amenity === filter);
+
+    // Clear old markers
+    map.eachLayer(layer => {
+      if (layer instanceof L.Marker) map.removeLayer(layer);
+    });
+
+    filtered.forEach(place => {
+      const color = getColor(place.tags);
+      const icon  = L.divIcon({
+        html: '<div style="width:32px;height:32px;background:' + color + ';border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>',
+        iconSize:   [32, 32],
+        iconAnchor: [16, 32],
+        className:  '',
+      });
+
+      const dist    = getDist(location.lat, location.lng, place.lat, place.lng);
+      const callBtn = place.phone
+        ? '<button onclick="window.location.href=\'tel:' + place.phone + '\'" style="flex:1;padding:8px;background:#00C896;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">📞 Call</button>'
+        : '';
+      const dirBtn  = '<button onclick="window.open(\'https://www.google.com/maps/dir/?api=1&destination=' + place.lat + ',' + place.lng + '\',\'_blank\')" style="flex:1;padding:8px;background:#EEF2FF;color:#0A2F6E;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Directions</button>';
+
+      const popup = '<div style="font-family:sans-serif;min-width:180px;">' +
+        '<div style="font-weight:700;font-size:14px;color:#0A2F6E;margin-bottom:2px;">' + getLabel(place.tags) + '</div>' +
+        '<div style="font-size:13px;color:#333;margin-bottom:4px;">' + place.name + '</div>' +
+        '<div style="font-size:12px;color:#5A6A8A;margin-bottom:10px;">📍 ' + dist + '</div>' +
+        '<div style="display:flex;gap:8px;">' + callBtn + dirBtn + '</div>' +
+        '</div>';
+
+      L.marker([place.lat, place.lng], { icon })
+        .addTo(map)
+        .bindPopup(popup);
+    });
+  }, [places, filter, location]);
+
+  const filtered = filter === 'all'
+    ? places
+    : places.filter(p => p.tags && p.tags.amenity === filter);
 
   return (
-    <div style={styles.screen}>
+    <div style={{position:'fixed',inset:'0',maxWidth:'420px',margin:'0 auto',display:'flex',flexDirection:'column',background:'#F4F8FF'}}>
+      <div style={{flex:'1',position:'relative'}}>
 
-      <div
-        style={styles.mapWrap}
-        onClick={(e) => {
-          if (e.target.tagName === 'svg' ||
-              e.target.tagName === 'rect' ||
-              e.target.tagName === 'line' ||
-              e.target.tagName === 'ellipse' ||
-              e.target.tagName === 'text') {
-            setSelectedPin(null);
-          }
-        }}
-      >
-
-        {/* Search & Filter */}
-        <div style={styles.searchWrap}>
-          <div style={styles.searchBox}>
-            <span style={{ fontSize: '18px' }}>🔍</span>
-            <input
-              style={styles.searchInput}
-              placeholder="Search hospital, clinic..."
-            />
-            <span
-              style={{ fontSize: '18px', cursor: 'pointer' }}
-              onClick={() => showToast('📍 Using your GPS location')}
-            >
-              📍
+        {/* Search bar */}
+        <div style={{position:'absolute',top:'16px',left:'16px',right:'16px',zIndex:'1000',display:'flex',flexDirection:'column',gap:'8px'}}>
+          <div style={{background:'#fff',borderRadius:'14px',padding:'12px 16px',display:'flex',alignItems:'center',gap:'10px',boxShadow:'0 4px 24px rgba(10,47,110,0.15)'}}>
+            <span style={{fontSize:'18px'}}>🔍</span>
+            <span style={{flex:'1',fontSize:'14px',color:'#5A6A8A'}}>
+              {loading
+                ? 'Finding hospitals near you...'
+                : filtered.length + ' places found nearby'}
             </span>
+            <span style={{fontSize:'18px'}}>📍</span>
           </div>
-          <div style={styles.chipsRow}>
-            {['All', '🏥 Hospitals', '🏨 Clinics',
-              '💊 Pharmacy', '🚑 Emergency'].map((c, i) => (
-              <div key={i} style={i === 0 ? styles.chipActive : styles.chip}>
-                {c}
+          <div style={{display:'flex',gap:'8px',overflowX:'auto'}}>
+            {filters.map(f => (
+              <div
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                style={{
+                  background:   filter === f.id ? '#0A2F6E' : '#fff',
+                  color:        filter === f.id ? '#fff'    : '#0A2F6E',
+                  borderRadius: '50px',
+                  padding:      '7px 14px',
+                  fontSize:     '12px',
+                  fontWeight:   '700',
+                  whiteSpace:   'nowrap',
+                  cursor:       'pointer',
+                  flexShrink:   '0',
+                  boxShadow:    '0 2px 8px rgba(10,47,110,0.1)',
+                }}
+              >
+                {f.label}
               </div>
             ))}
           </div>
         </div>
 
-        {/* SVG Map */}
-        <svg
-          viewBox="0 0 420 620"
-          style={{
-            position: 'absolute',
-            inset:    '0',
-            width:    '100%',
-            height:   '100%',
-          }}
-        >
-          {/* Map background */}
-          <rect width="420" height="620" fill="#e8f0dc"/>
+        {/* Count badge */}
+        {!loading && (
+          <div style={{position:'absolute',top:'100px',right:'16px',background:'#0A2F6E',color:'#fff',borderRadius:'50px',padding:'6px 14px',fontSize:'12px',fontWeight:'700',zIndex:'1000'}}>
+            {'📍 ' + filtered.length + ' nearby'}
+          </div>
+        )}
 
-          {/* Roads */}
-          <line x1="0"   y1="160" x2="420" y2="160" stroke="#fff" strokeWidth="20"/>
-          <line x1="0"   y1="320" x2="420" y2="320" stroke="#fff" strokeWidth="20"/>
-          <line x1="0"   y1="480" x2="420" y2="480" stroke="#fff" strokeWidth="16"/>
-          <line x1="105" y1="0"   x2="105" y2="620" stroke="#fff" strokeWidth="14"/>
-          <line x1="220" y1="0"   x2="220" y2="620" stroke="#fff" strokeWidth="24"/>
-          <line x1="340" y1="0"   x2="340" y2="620" stroke="#fff" strokeWidth="14"/>
+        {/* Map container */}
+        <div
+          ref={mapRef}
+          style={{width:'100%',height:'100%'}}
+        />
 
-          {/* Blocks */}
-          <rect x="115" y="170" width="95"  height="140" rx="10" fill="#d4e6c8" opacity=".8"/>
-          <rect x="230" y="170" width="100" height="140" rx="10" fill="#d4e6c8" opacity=".8"/>
-          <rect x="115" y="330" width="95"  height="140" rx="10" fill="#d4e6c8" opacity=".8"/>
-          <rect x="230" y="330" width="100" height="140" rx="10" fill="#d4e6c8" opacity=".8"/>
-          <rect x="8"   y="170" width="88"  height="300" rx="10" fill="#c8dcc0" opacity=".6"/>
-          <rect x="352" y="170" width="62"  height="300" rx="10" fill="#c8dcc0" opacity=".6"/>
-
-          {/* Park */}
-          <ellipse cx="163" cy="245" rx="32" ry="24" fill="#a8d898" opacity=".9"/>
-          <text x="163" y="250" textAnchor="middle" fontSize="16">🌳</text>
-
-          {/* Water */}
-          <ellipse cx="280" cy="400" rx="28" ry="18" fill="#a8c8e8" opacity=".7"/>
-
-          {/* Road labels */}
-          <text x="210" y="152" textAnchor="middle" fontSize="9"
-            fill="#aaa" fontFamily="sans-serif" fontWeight="600">
-            MAIN ROAD
-          </text>
-          <text x="210" y="312" textAnchor="middle" fontSize="9"
-            fill="#aaa" fontFamily="sans-serif" fontWeight="600">
-            CROSS STREET
-          </text>
-
-          {/* You are here */}
-          <circle cx="220" cy="320" r="20"
-            fill="rgba(10,47,110,0.15)"
-            stroke="rgba(10,47,110,0.3)"
-            strokeWidth="1.5"
-          />
-          <circle cx="220" cy="320" r="10" fill="#0A2F6E"/>
-          <circle cx="220" cy="320" r="4"  fill="#fff"/>
-
-          {/* Hospital pins */}
-          {hospitals.map(h => (
-            <g
-              key={h.id}
-              style={{ cursor: 'pointer' }}
-              onClick={() => setSelectedPin(h)}
-            >
-              <circle
-                cx={h.cx} cy={h.cy} r="22"
-                fill={h.color}
-                stroke="#fff"
-                strokeWidth="2"
-              />
-              <text
-                x={h.cx} y={h.cy + 7}
-                textAnchor="middle"
-                fontSize="18"
-              >
-                {h.icon}
-              </text>
-            </g>
-          ))}
-        </svg>
-
-        {/* Popup card */}
-        {selectedPin && (
-          <div style={styles.popup}>
-            <div style={styles.popupRow}>
-              <div style={styles.popupIcon}>{selectedPin.icon}</div>
-              <div>
-                <div style={styles.popupName}>{selectedPin.name}</div>
-                <div style={styles.popupSub}>{selectedPin.sub}</div>
-              </div>
+        {/* Loading */}
+        {loading && (
+          <div style={{position:'absolute',inset:'0',background:'rgba(255,255,255,0.92)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:'2000',gap:'12px'}}>
+            <div style={{fontSize:'48px'}}>🗺️</div>
+            <div style={{fontSize:'16px',fontWeight:'700',color:'#0A2F6E'}}>
+              Finding hospitals near you...
             </div>
-            <div style={styles.popupBtns}>
-              <button
-                style={styles.btnCall}
-                onClick={() => showToast('📞 Calling hospital...')}
-              >
-                📞 Call
-              </button>
-              <button
-                style={styles.btnDir}
-                onClick={() => showToast('🗺️ Opening directions...')}
-              >
-                🗺️ Directions
-              </button>
+            <div style={{fontSize:'13px',color:'#5A6A8A'}}>
+              Getting your GPS location
             </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{position:'absolute',bottom:'80px',left:'16px',right:'16px',background:'#FFF3CD',borderRadius:'12px',padding:'10px 14px',fontSize:'13px',color:'#856404',zIndex:'1000'}}>
+            {'⚠️ ' + error}
           </div>
         )}
 
       </div>
 
-      {/* Bottom Nav */}
-      <BottomNav active="map" navigate={navigate} />
-
+      <BottomNav active="map" navigate={navigate}/>
     </div>
   );
 }
