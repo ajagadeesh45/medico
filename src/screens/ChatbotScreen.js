@@ -1,31 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// ── Initialize Gemini ──
-const genAI = new GoogleGenerativeAI(
-  process.env.REACT_APP_GEMINI_KEY
-);
+const GEMINI_KEY = process.env.REACT_APP_GEMINI_KEY;
 
-const SYSTEM_PROMPT = `You are Medico AI, a helpful medical assistant for Indian patients. 
-
+const SYSTEM_PROMPT = `You are Medico AI, a helpful medical assistant for Indian patients.
 Rules:
 1. Always respond in the same language the user writes in (Tamil or English)
 2. Give practical first aid advice for common symptoms
 3. Always recommend seeing a real doctor for serious symptoms
 4. Keep responses short and clear — max 5 lines
-5. If symptoms sound serious (chest pain, difficulty breathing, stroke) — immediately say CALL 108
+5. If symptoms sound serious (chest pain, difficulty breathing) say CALL 108 immediately
 6. Add relevant emojis to make it friendly
 7. Never diagnose — only suggest and guide
-8. End every response with either "Talk to a Medico Doctor →" or "Call 108 immediately 🚨"
+8. End every response with either "Talk to a Medico Doctor →" or "Call 108 immediately 🚨"`;
 
-You serve rural and urban patients across Tamil Nadu and India.`;
-
-export default function ChatbotScreen({ navigate, showToast }) {
+export default function ChatbotScreen({ navigate }) {
 
   const [messages, setMessages] = useState([
     {
-      from: 'bot',
-      text: '👋 Hello! I am Medico AI.\n\nTell me your symptoms in English or Tamil and I will help you.\n\nநான் தமிழிலும் பதில் சொல்வேன்! 😊',
+      from:    'bot',
+      text:    '👋 Hello! I am Medico AI.\n\nTell me your symptoms in English or Tamil and I will help you.\n\nநான் தமிழிலும் பதில் சொல்வேன்! 😊',
       showCTA: false,
     },
   ]);
@@ -33,60 +26,77 @@ export default function ChatbotScreen({ navigate, showToast }) {
   const [lang, setLang]         = useState('en');
   const [isTyping, setIsTyping] = useState(false);
   const bottomRef               = useRef(null);
-  const chatRef                 = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // ── Send to Gemini AI ──
+  // ── Call Gemini API ──
   const askGemini = async (userText) => {
     try {
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+      console.log('Gemini key:', GEMINI_KEY ? 'found ✅' : 'missing ❌');
+
+      const url =
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
+        GEMINI_KEY;
+
+      const body = {
+        system_instruction: {
+          parts: [{ text: SYSTEM_PROMPT }],
+        },
+        contents: [
+          {
+            role:  'user',
+            parts: [{ text: userText }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 300,
+          temperature:     0.7,
+        },
+      };
+
+      const res  = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
       });
 
-      // Build conversation history
-      const history = messages
-        .filter(m => m.from === 'user' || (m.from === 'bot' && m.text))
-        .slice(-6) // last 6 messages for context
-        .map(m => ({
-          role:  m.from === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }],
-        }));
+      console.log('Gemini status:', res.status);
+      const data = await res.json();
+      console.log('Gemini data:', data);
 
-      const chat = model.startChat({
-        history,
-        generationConfig: { maxOutputTokens: 300 },
-      });
+      if (data.candidates && data.candidates[0]) {
+        return data.candidates[0].content.parts[0].text;
+      }
 
-      const fullPrompt = SYSTEM_PROMPT + '\n\nUser says: ' + userText;
-      const result = await chat.sendMessage(fullPrompt);
-      return result.response.text();
+      if (data.error) {
+        console.error('Gemini error:', data.error.message);
+        return '⚠️ ' + data.error.message;
+      }
+
+      return '⚠️ No response. Please try again.';
 
     } catch (err) {
-      console.error('Gemini error:', err);
-      return '⚠️ AI is busy right now. Please try again or talk to a real doctor.';
+      console.error('Gemini fetch error:', err);
+      return '⚠️ Could not connect to AI. Check internet.';
     }
   };
 
   // ── Send message ──
   const sendMessage = async (text) => {
-    if (!text.trim()) return;
-    if (isTyping) return;
+    if (!text.trim() || isTyping) return;
 
-    // Add user message
-    setMessages(prev => [...prev, { from: 'user', text }]);
+    setMessages(prev => [...prev, { from:'user', text }]);
     setInput('');
     setIsTyping(true);
 
-    // Get AI response
     const reply = await askGemini(text);
 
     setIsTyping(false);
     setMessages(prev => [
       ...prev,
-      { from: 'bot', text: reply, showCTA: true },
+      { from:'bot', text: reply, showCTA: true },
     ]);
   };
 
@@ -99,7 +109,7 @@ export default function ChatbotScreen({ navigate, showToast }) {
     '🤒 Body pain',
   ];
 
-  const styles = {
+  const s = {
     screen: {
       position:      'fixed',
       inset:         '0',
@@ -129,7 +139,6 @@ export default function ChatbotScreen({ navigate, showToast }) {
       flexShrink:     '0',
     },
     botName: {
-      fontFamily: "'Syne', sans-serif",
       fontSize:   '16px',
       fontWeight: '800',
       color:      '#fff',
@@ -144,26 +153,16 @@ export default function ChatbotScreen({ navigate, showToast }) {
       gap:        '6px',
       marginLeft: 'auto',
     },
-    langPill: {
+    langPill: (active) => ({
       padding:      '5px 10px',
       borderRadius: '50px',
       fontSize:     '11px',
       fontWeight:   '700',
-      border:       '1.5px solid rgba(255,255,255,0.25)',
-      color:        'rgba(255,255,255,0.6)',
+      border:       '1.5px solid rgba(255,255,255,' + (active ? '0.4' : '0.2') + ')',
+      color:        active ? '#fff' : 'rgba(255,255,255,0.5)',
       cursor:       'pointer',
-      background:   'transparent',
-    },
-    langPillActive: {
-      padding:      '5px 10px',
-      borderRadius: '50px',
-      fontSize:     '11px',
-      fontWeight:   '700',
-      border:       '1.5px solid rgba(255,255,255,0.4)',
-      color:        '#fff',
-      cursor:       'pointer',
-      background:   'rgba(255,255,255,0.15)',
-    },
+      background:   active ? 'rgba(255,255,255,0.15)' : 'transparent',
+    }),
     chatBody: {
       flex:      '1',
       overflowY: 'auto',
@@ -233,7 +232,6 @@ export default function ChatbotScreen({ navigate, showToast }) {
       height:       '7px',
       background:   '#9BA8C9',
       borderRadius: '50%',
-      animation:    'bounce 0.8s ease-in-out infinite',
     },
     cta: {
       margin:       '4px 0 12px',
@@ -249,7 +247,6 @@ export default function ChatbotScreen({ navigate, showToast }) {
       textAlign:    'left',
     },
     ctaText: {
-      fontFamily: "'Syne', sans-serif",
       fontSize:   '14px',
       fontWeight: '700',
       color:      '#fff',
@@ -259,6 +256,14 @@ export default function ChatbotScreen({ navigate, showToast }) {
       fontSize:  '11px',
       color:     'rgba(255,255,255,0.55)',
       marginTop: '2px',
+    },
+    disclaimer: {
+      textAlign:  'center',
+      fontSize:   '11px',
+      color:      '#9BA8C9',
+      padding:    '6px 16px 0',
+      flexShrink: '0',
+      background: '#fff',
     },
     inputRow: {
       padding:    '12px 16px',
@@ -275,7 +280,6 @@ export default function ChatbotScreen({ navigate, showToast }) {
       background:   '#EEF2FF',
       border:       'none',
       borderRadius: '50px',
-      fontFamily:   "'DM Sans', sans-serif",
       fontSize:     '14px',
       outline:      'none',
       color:        '#0D1B3E',
@@ -283,54 +287,37 @@ export default function ChatbotScreen({ navigate, showToast }) {
     sendBtn: {
       width:          '44px',
       height:         '44px',
-      background:     '#0A2F6E',
+      background:     isTyping ? '#9BA8C9' : '#0A2F6E',
       borderRadius:   '50%',
       border:         'none',
       fontSize:       '18px',
-      cursor:         'pointer',
+      cursor:         isTyping ? 'not-allowed' : 'pointer',
       flexShrink:     '0',
       display:        'flex',
       alignItems:     'center',
       justifyContent: 'center',
     },
-    disclaimer: {
-      textAlign:  'center',
-      fontSize:   '11px',
-      color:      '#9BA8C9',
-      padding:    '6px 16px 0',
-      flexShrink: '0',
-      background: '#fff',
-    },
   };
 
   return (
-    <div style={styles.screen}>
+    <div style={s.screen}>
 
       {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.botAva}>🤖</div>
+      <div style={s.header}>
+        <div style={s.botAva}>🤖</div>
         <div>
-          <div style={styles.botName}>Medico AI</div>
-          <div style={styles.botStatus}>
-            🟢 Powered by Gemini • Always Online
-          </div>
+          <div style={s.botName}>Medico AI</div>
+          <div style={s.botStatus}>🟢 Powered by Gemini • Always Online</div>
         </div>
-        <div style={styles.langPills}>
+        <div style={s.langPills}>
           {[
-            { code: 'en', label: 'EN'     },
-            { code: 'ta', label: 'தமிழ்' },
+            { code:'en', label:'EN'     },
+            { code:'ta', label:'தமிழ்' },
           ].map(l => (
             <button
               key={l.code}
-              style={lang === l.code
-                ? styles.langPillActive
-                : styles.langPill}
-              onClick={() => {
-                setLang(l.code);
-                showToast(l.code === 'ta'
-                  ? '🌐 Tamil selected!'
-                  : '🌐 English selected!');
-              }}
+              style={s.langPill(lang === l.code)}
+              onClick={() => setLang(l.code)}
             >
               {l.label}
             </button>
@@ -339,28 +326,22 @@ export default function ChatbotScreen({ navigate, showToast }) {
       </div>
 
       {/* Chat body */}
-      <div style={styles.chatBody} ref={chatRef}>
+      <div style={s.chatBody}>
         {messages.map((msg, i) => (
           <div key={i}>
-            <div style={msg.from === 'bot'
-              ? styles.msgBot
-              : styles.msgUser}
-            >
-              <div style={msg.from === 'bot'
-                ? styles.bubbleBot
-                : styles.bubbleUser}
-              >
+            <div style={msg.from === 'bot' ? s.msgBot : s.msgUser}>
+              <div style={msg.from === 'bot' ? s.bubbleBot : s.bubbleUser}>
                 {msg.text}
               </div>
             </div>
 
-            {/* Quick replies on first message */}
+            {/* Quick replies — first message only */}
             {msg.from === 'bot' && i === 0 && (
-              <div style={styles.quickReplies}>
+              <div style={s.quickReplies}>
                 {quickReplies.map((qr, j) => (
                   <button
                     key={j}
-                    style={styles.qr}
+                    style={s.qr}
                     onClick={() => sendMessage(qr)}
                   >
                     {qr}
@@ -372,20 +353,14 @@ export default function ChatbotScreen({ navigate, showToast }) {
             {/* Talk to doctor CTA */}
             {msg.from === 'bot' && msg.showCTA && (
               <button
-                style={styles.cta}
+                style={s.cta}
                 onClick={() => navigate('doctors')}
               >
                 <div>
-                  <div style={styles.ctaText}>
-                    👨‍⚕️ Talk to a Real Doctor
-                  </div>
-                  <div style={styles.ctaSub}>
-                    Verified doctors available now
-                  </div>
+                  <div style={s.ctaText}>👨‍⚕️ Talk to a Real Doctor</div>
+                  <div style={s.ctaSub}>Verified doctors available now</div>
                 </div>
-                <span style={{fontSize:'20px',color:'rgba(255,255,255,0.6)'}}>
-                  ›
-                </span>
+                <span style={{ fontSize:'20px', color:'rgba(255,255,255,0.6)' }}>›</span>
               </button>
             )}
           </div>
@@ -393,38 +368,44 @@ export default function ChatbotScreen({ navigate, showToast }) {
 
         {/* Typing indicator */}
         {isTyping && (
-          <div style={styles.typingWrap}>
+          <div style={s.typingWrap}>
             {[0,1,2].map(i => (
-              <div key={i} style={{
-                ...styles.typingDot,
-                animationDelay: i * 0.15 + 's',
-              }}/>
+              <div
+                key={i}
+                style={{
+                  ...s.typingDot,
+                  animationDelay: i * 0.15 + 's',
+                }}
+              />
             ))}
           </div>
         )}
 
-        <div ref={bottomRef}/>
+        <div ref={bottomRef} />
       </div>
 
       {/* Disclaimer */}
-      <div style={styles.disclaimer}>
+      <div style={s.disclaimer}>
         ⚕️ AI advice is not a substitute for professional medical care
       </div>
 
       {/* Input */}
-      <div style={styles.inputRow}>
+      <div style={s.inputRow}>
         <input
-          style={styles.input}
-          placeholder={lang === 'ta'
-            ? 'உங்கள் அறிகுறிகளை தட்டச்சு செய்யுங்கள்...'
-            : 'Type your symptoms...'}
+          style={s.input}
+          placeholder={
+            lang === 'ta'
+              ? 'உங்கள் அறிகுறிகளை தட்டச்சு செய்யுங்கள்...'
+              : 'Type your symptoms...'
+          }
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && sendMessage(input)}
         />
         <button
-          style={styles.sendBtn}
+          style={s.sendBtn}
           onClick={() => sendMessage(input)}
+          disabled={isTyping}
         >
           📤
         </button>

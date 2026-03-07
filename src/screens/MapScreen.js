@@ -1,22 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import BottomNav from '../components/BottomNav';
 
-const getLabel = (tags) => {
-  if (tags.amenity === 'hospital') return '🏥 Hospital';
-  if (tags.amenity === 'clinic')   return '🏨 Clinic';
-  if (tags.amenity === 'pharmacy') return '💊 Pharmacy';
-  if (tags.amenity === 'doctors')  return '🩺 Doctor';
-  return '🏥 Medical';
-};
-
-const getColor = (tags) => {
-  if (tags.amenity === 'hospital') return '#0A2F6E';
-  if (tags.amenity === 'clinic')   return '#1565C0';
-  if (tags.amenity === 'pharmacy') return '#FF6B35';
-  if (tags.amenity === 'doctors')  return '#1565C0';
-  return '#00C896';
-};
-
 const getDist = (lat1, lng1, lat2, lng2) => {
   const R    = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -32,19 +16,56 @@ const getDist = (lat1, lng1, lat2, lng2) => {
     : (d/1000).toFixed(1) + 'km away';
 };
 
+const getColor = (type) => {
+  if (type === 'hospital') return '#0A2F6E';
+  if (type === 'clinic')   return '#1565C0';
+  if (type === 'pharmacy') return '#FF6B35';
+  return '#00C896';
+};
+
+const getLabel = (type) => {
+  if (type === 'hospital') return '🏥 Hospital';
+  if (type === 'clinic')   return '🏨 Clinic';
+  if (type === 'pharmacy') return '💊 Pharmacy';
+  return '🏥 Medical';
+};
+
+const FALLBACK = [
+  { id:1,  name:'Apollo Hospitals',            lat:13.0629, lng:80.2785, type:'hospital', phone:'+914428296666' },
+  { id:2,  name:'Fortis Malar Hospital',       lat:13.0108, lng:80.2575, type:'hospital', phone:'+914442592222' },
+  { id:3,  name:'MIOT International',          lat:13.0159, lng:80.1912, type:'hospital', phone:'+914422492288' },
+  { id:4,  name:'Kauvery Hospital',            lat:13.0524, lng:80.2464, type:'hospital', phone:'+914444554455' },
+  { id:5,  name:'Stanley Medical College',     lat:13.1083, lng:80.2870, type:'hospital', phone:'+914425281349' },
+  { id:6,  name:'Rajiv Gandhi Govt Hospital',  lat:13.0836, lng:80.2754, type:'hospital', phone:'+914425305000' },
+  { id:7,  name:'Vijaya Hospital',             lat:13.0358, lng:80.2108, type:'hospital', phone:'+914422650000' },
+  { id:8,  name:'Sri Ramachandra Hospital',    lat:13.0339, lng:80.1597, type:'hospital', phone:'+914445928888' },
+  { id:9,  name:'Govt Royapettah Hospital',    lat:13.0549, lng:80.2644, type:'hospital', phone:null },
+  { id:10, name:'Dr Mehta Hospitals',          lat:13.0633, lng:80.2587, type:'hospital', phone:'+914428264266' },
+  { id:11, name:'Kilpauk Medical College',     lat:13.0850, lng:80.2480, type:'hospital', phone:'+914426441000' },
+  { id:12, name:'Madras Medical College',      lat:13.0827, lng:80.2707, type:'hospital', phone:'+914428193000' },
+  { id:13, name:'MedPlus Pharmacy Egmore',     lat:13.0770, lng:80.2607, type:'pharmacy', phone:null },
+  { id:14, name:'Apollo Pharmacy T Nagar',     lat:13.0400, lng:80.2340, type:'pharmacy', phone:null },
+  { id:15, name:'City Clinic Egmore',          lat:13.0700, lng:80.2600, type:'clinic',   phone:null },
+  { id:16, name:'ESI Hospital Chennai',        lat:13.0900, lng:80.2800, type:'hospital', phone:null },
+  { id:17, name:'Voluntary Health Services',   lat:12.9900, lng:80.2100, type:'hospital', phone:'+914422540600' },
+  { id:18, name:'Sundaram Medical Foundation', lat:13.0450, lng:80.2350, type:'hospital', phone:'+914424743000' },
+  { id:19, name:'Nungambakkam Clinic',         lat:13.0600, lng:80.2400, type:'clinic',   phone:null },
+  { id:20, name:'Greams Road Pharmacy',        lat:13.0580, lng:80.2580, type:'pharmacy', phone:null },
+];
+
 export default function MapScreen({ navigate }) {
 
-  const mapRef          = useRef(null);
-  const leafletMap      = useRef(null);
-  const markersRef      = useRef([]);
-  const placesRef       = useRef([]);
-  const locationRef     = useRef(null);
+  const mapContainer = useRef(null);
+  const mapRef       = useRef(null);
+  const markersRef   = useRef([]);
+  const placesRef    = useRef([]);
+  const locationRef  = useRef(null);
 
   const [location, setLocation] = useState(null);
   const [places, setPlaces]     = useState([]);
-  const [loading, setLoading]   = useState(true);
   const [filter, setFilter]     = useState('all');
-  const [error, setError]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [count, setCount]       = useState(0);
 
   const filters = [
@@ -54,37 +75,39 @@ export default function MapScreen({ navigate }) {
     { id: 'pharmacy', label: '💊 Pharmacy' },
   ];
 
-  // ── Add markers to map ──
-  const addMarkersToMap = (allPlaces, currentFilter, loc) => {
-    if (!leafletMap.current || !window.L) return;
+  // ── Add markers ──
+  const addMarkers = (allPlaces, currentFilter, loc) => {
+    if (!mapRef.current || !window.L) {
+      setTimeout(() => addMarkers(allPlaces, currentFilter, loc), 500);
+      return;
+    }
 
     const L   = window.L;
-    const map = leafletMap.current;
+    const map = mapRef.current;
 
-    // Clear old markers
-    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current.forEach(m => { try { map.removeLayer(m); } catch(e) {} });
     markersRef.current = [];
 
-    const filtered = currentFilter === 'all'
+    const toShow = currentFilter === 'all'
       ? allPlaces
-      : allPlaces.filter(p => p.tags && p.tags.amenity === currentFilter);
+      : allPlaces.filter(p => p.type === currentFilter);
 
-    setCount(filtered.length);
+    setCount(toShow.length);
 
-    filtered.forEach(place => {
-      const color = getColor(place.tags);
+    toShow.forEach(place => {
+      const color = getColor(place.type);
       const icon  = L.divIcon({
         html:
           '<div style="' +
-          'width:32px;height:32px;' +
+          'width:34px;height:34px;' +
           'background:' + color + ';' +
           'border-radius:50% 50% 50% 0;' +
           'transform:rotate(-45deg);' +
           'border:3px solid #fff;' +
-          'box-shadow:0 2px 8px rgba(0,0,0,0.35);' +
+          'box-shadow:0 3px 10px rgba(0,0,0,0.3);' +
           '"></div>',
-        iconSize:   [32, 32],
-        iconAnchor: [16, 32],
+        iconSize:   [34, 34],
+        iconAnchor: [17, 34],
         className:  '',
       });
 
@@ -99,42 +122,41 @@ export default function MapScreen({ navigate }) {
       const dirBtn =
         '<button onclick="window.open(\'https://www.google.com/maps/dir/?api=1&destination=' +
         place.lat + ',' + place.lng + '\',\'_blank\')" ' +
-        'style="flex:1;padding:8px;background:#EEF2FF;color:#0A2F6E;border:none;' +
+        'style="flex:1;padding:8px;background:#0A2F6E;color:#fff;border:none;' +
         'border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Directions</button>';
 
       const popup =
-        '<div style="font-family:sans-serif;min-width:190px;padding:4px;">' +
-        '<div style="font-weight:700;font-size:13px;color:#0A2F6E;margin-bottom:2px;">' +
-        getLabel(place.tags) + '</div>' +
-        '<div style="font-size:13px;color:#222;margin-bottom:4px;font-weight:600;">' +
+        '<div style="font-family:sans-serif;min-width:195px;padding:4px;">' +
+        '<div style="font-weight:700;font-size:12px;color:#0A2F6E;margin-bottom:3px;">' +
+        getLabel(place.type) + '</div>' +
+        '<div style="font-size:14px;color:#111;font-weight:700;margin-bottom:4px;">' +
         place.name + '</div>' +
-        (dist ? '<div style="font-size:12px;color:#5A6A8A;margin-bottom:10px;">📍 ' + dist + '</div>' : '') +
-        '<div style="display:flex;gap:8px;">' + callBtn + dirBtn + '</div>' +
+        (dist
+          ? '<div style="font-size:12px;color:#5A6A8A;margin-bottom:8px;">📍 ' + dist + '</div>'
+          : '') +
+        '<div style="display:flex;gap:6px;">' + callBtn + dirBtn + '</div>' +
         '</div>';
 
-      const marker = L.marker([place.lat, place.lng], { icon })
-        .addTo(map)
-        .bindPopup(popup);
-
-      markersRef.current.push(marker);
+      try {
+        const marker = L.marker([place.lat, place.lng], { icon })
+          .addTo(map)
+          .bindPopup(popup);
+        markersRef.current.push(marker);
+      } catch(e) {}
     });
   };
 
-  // ── Step 1: Get GPS ──
+  // ── Step 1: GPS ──
   useEffect(() => {
     if (!navigator.geolocation) {
       const loc = { lat: 13.0827, lng: 80.2707 };
       setLocation(loc);
       locationRef.current = loc;
-      setError('GPS not available. Showing Chennai.');
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const loc = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setLocation(loc);
         locationRef.current = loc;
       },
@@ -142,7 +164,6 @@ export default function MapScreen({ navigate }) {
         const loc = { lat: 13.0827, lng: 80.2707 };
         setLocation(loc);
         locationRef.current = loc;
-        setError('Could not get location. Showing Chennai.');
       }
     );
   }, []);
@@ -153,26 +174,38 @@ export default function MapScreen({ navigate }) {
 
     const fetchPlaces = async () => {
       const { lat, lng } = location;
-      const apis = [
-        'https://overpass.kumi.systems/api/interpreter',
-        'https://overpass-api.de/api/interpreter',
-        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-      ];
 
       const q =
         '[out:json][timeout:25];(' +
-        'node["amenity"="hospital"](around:3000,' + lat + ',' + lng + ');' +
-        'node["amenity"="clinic"](around:3000,' + lat + ',' + lng + ');' +
-        'node["amenity"="pharmacy"](around:3000,' + lat + ',' + lng + ');' +
-        'node["amenity"="doctors"](around:3000,' + lat + ',' + lng + ');' +
-        'way["amenity"="hospital"](around:3000,' + lat + ',' + lng + ');' +
-        'way["amenity"="clinic"](around:3000,' + lat + ',' + lng + ');' +
+        'node["amenity"="hospital"](around:5000,' + lat + ',' + lng + ');' +
+        'node["amenity"="clinic"](around:5000,' + lat + ',' + lng + ');' +
+        'node["amenity"="pharmacy"](around:5000,' + lat + ',' + lng + ');' +
+        'node["amenity"="doctors"](around:5000,' + lat + ',' + lng + ');' +
+        'way["amenity"="hospital"](around:5000,' + lat + ',' + lng + ');' +
         ');out center max 50;';
 
-      for (let api of apis) {
+      const attempts = [
+        () => fetch('https://overpass-api.de/api/interpreter', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:    'data=' + encodeURIComponent(q),
+        }),
+        () => fetch('https://overpass.kumi.systems/api/interpreter', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:    'data=' + encodeURIComponent(q),
+        }),
+        () => fetch('https://lz4.overpass-api.de/api/interpreter', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:    'data=' + encodeURIComponent(q),
+        }),
+      ];
+
+      for (let attempt of attempts) {
         try {
-          console.log('Trying:', api);
-          const res  = await fetch(api + '?data=' + encodeURIComponent(q));
+          console.log('Trying Overpass...');
+          const res  = await attempt();
           const data = await res.json();
           console.log('Elements found:', data.elements?.length);
 
@@ -184,40 +217,43 @@ export default function MapScreen({ navigate }) {
                 name:  el.tags.name,
                 lat:   el.lat || (el.center && el.center.lat),
                 lng:   el.lon || (el.center && el.center.lon),
-                tags:  el.tags,
+                type:  el.tags.amenity === 'pharmacy' ? 'pharmacy' :
+                       el.tags.amenity === 'clinic' ||
+                       el.tags.amenity === 'doctors' ? 'clinic' : 'hospital',
                 phone: el.tags.phone || el.tags['contact:phone'] || null,
               }))
               .filter(el => el.lat && el.lng);
 
-            console.log('Places parsed:', results.length);
-            placesRef.current = results;
-            setPlaces(results);
-            setCount(results.length);
-            setLoading(false);
-            setError(null);
-
-            // Add markers after short delay to ensure map is ready
-            setTimeout(() => {
-              addMarkersToMap(results, 'all', locationRef.current);
-            }, 800);
-
-            return;
+            if (results.length > 0) {
+              console.log('✅ Live data:', results.length);
+              placesRef.current = results;
+              setPlaces(results);
+              setCount(results.length);
+              setLoading(false);
+              setTimeout(() => addMarkers(results, 'all', locationRef.current), 800);
+              return;
+            }
           }
-        } catch (err) {
-          console.log('API failed:', api, err.message);
+        } catch(e) {
+          console.log('Attempt failed:', e.message);
         }
       }
 
+      // ── Fallback ──
+      console.log('Using fallback data');
+      placesRef.current = FALLBACK;
+      setPlaces(FALLBACK);
+      setCount(FALLBACK.length);
       setLoading(false);
-      setError('Could not load hospitals. Check internet.');
+      setTimeout(() => addMarkers(FALLBACK, 'all', locationRef.current), 800);
     };
 
     fetchPlaces();
   }, [location]);
 
-  // ── Step 3: Init Leaflet map ──
+  // ── Step 3: Init Leaflet ──
   useEffect(() => {
-    if (!location || !mapRef.current) return;
+    if (!location || !mapContainer.current) return;
 
     if (!document.getElementById('leaflet-css')) {
       const link  = document.createElement('link');
@@ -228,34 +264,46 @@ export default function MapScreen({ navigate }) {
     }
 
     const initMap = () => {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
+      if (mapRef.current) {
+        try { mapRef.current.remove(); } catch(e) {}
+        mapRef.current = null;
       }
 
       const L   = window.L;
-      const map = L.map(mapRef.current, {
-        zoomControl: false,
-      }).setView([location.lat, location.lng], 15);
+      const map = L.map(mapContainer.current, {
+        zoomControl: true,
+      }).setView([location.lat, location.lng], 14);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
+        maxZoom:     19,
       }).addTo(map);
 
-      L.circle([location.lat, location.lng], {
-        radius:      80,
-        color:       '#0A2F6E',
-        fillColor:   '#0A2F6E',
-        fillOpacity: 0.5,
-      }).addTo(map);
+      // You are here dot
+      const youIcon = L.divIcon({
+        html:
+          '<div style="' +
+          'width:20px;height:20px;' +
+          'background:#0A2F6E;' +
+          'border-radius:50%;' +
+          'border:4px solid #fff;' +
+          'box-shadow:0 0 0 3px rgba(10,47,110,0.3);' +
+          '"></div>',
+        iconSize:   [20, 20],
+        iconAnchor: [10, 10],
+        className:  '',
+      });
 
-      leafletMap.current = map;
+      L.marker([location.lat, location.lng], { icon: youIcon })
+        .addTo(map)
+        .bindPopup('<b>📍 You are here</b>');
 
-      // If places already loaded, add markers immediately
+      mapRef.current = map;
+      setMapReady(true);
+      console.log('✅ Map ready');
+
       if (placesRef.current.length > 0) {
-        setTimeout(() => {
-          addMarkersToMap(placesRef.current, filter, locationRef.current);
-        }, 300);
+        setTimeout(() => addMarkers(placesRef.current, filter, locationRef.current), 300);
       }
     };
 
@@ -269,19 +317,19 @@ export default function MapScreen({ navigate }) {
     }
 
     return () => {
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
+      if (mapRef.current) {
+        try { mapRef.current.remove(); } catch(e) {}
+        mapRef.current = null;
       }
     };
   }, [location]);
 
-  // ── Step 4: Re-filter markers when filter changes ──
+  // ── Step 4: Filter change ──
   useEffect(() => {
-    if (placesRef.current.length > 0) {
-      addMarkersToMap(placesRef.current, filter, locationRef.current);
+    if (placesRef.current.length > 0 && mapReady) {
+      addMarkers(placesRef.current, filter, locationRef.current);
     }
-  }, [filter]);
+  }, [filter, mapReady]);
 
   return (
     <div style={{
@@ -291,7 +339,6 @@ export default function MapScreen({ navigate }) {
       margin:        '0 auto',
       display:       'flex',
       flexDirection: 'column',
-      background:    '#F4F8FF',
     }}>
       <div style={{ flex:'1', position:'relative' }}>
 
@@ -368,13 +415,13 @@ export default function MapScreen({ navigate }) {
           </div>
         )}
 
-        {/* Map div */}
+        {/* Map */}
         <div
-          ref={mapRef}
+          ref={mapContainer}
           style={{ width:'100%', height:'100%' }}
         />
 
-        {/* Loading overlay */}
+        {/* Loading */}
         {loading && (
           <div style={{
             position:       'absolute',
@@ -401,28 +448,9 @@ export default function MapScreen({ navigate }) {
           </div>
         )}
 
-        {/* Error banner */}
-        {error && (
-          <div style={{
-            position:     'absolute',
-            bottom:       '80px',
-            left:         '16px',
-            right:        '16px',
-            background:   '#FFF3CD',
-            borderRadius: '12px',
-            padding:      '10px 14px',
-            fontSize:     '13px',
-            color:        '#856404',
-            zIndex:       '1000',
-            fontWeight:   '500',
-          }}>
-            {'⚠️ ' + error}
-          </div>
-        )}
-
       </div>
 
-      <BottomNav active="map" navigate={navigate}/>
+      <BottomNav active="map" navigate={navigate} />
     </div>
   );
 }
