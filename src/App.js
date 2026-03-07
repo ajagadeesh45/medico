@@ -12,6 +12,7 @@ import EmergencyScreen     from './screens/EmergencyScreen';
 import RecordsScreen       from './screens/RecordsScreen';
 import ProfileScreen       from './screens/ProfileScreen';
 import OwnerDashboard      from './screens/OwnerDashboard';
+import VideoCallScreen     from './screens/VideoCallScreen';
 import Toast               from './components/Toast';
 
 export default function App() {
@@ -22,15 +23,12 @@ export default function App() {
   const [toast, setToast]                   = useState({ show: false, msg: '' });
   const [selectedDoctor, setSelectedDoctor] = useState(null);
 
-  // ── Check if already logged in ──
+  const routeByRole = (role) => role === 'doctor' ? 'owner' : 'home';
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
+        supabase.from('profiles').select('*').eq('id', session.user.id).single()
           .then(({ data: profile }) => {
             const userData = {
               id:    session.user.id,
@@ -40,45 +38,36 @@ export default function App() {
               role:  profile?.role  || 'patient',
             };
             setUser(userData);
-            setScreen(userData.role === 'doctor' ? 'owner' : 'home');
+            setScreen(routeByRole(userData.role));
           });
       }
     });
   }, []);
 
-  // ── Navigate ──
   const navigate = (to) => {
     setHistory(h => [...h, screen]);
     setScreen(to);
   };
 
-  // ── Go back ──
   const goBack = () => {
-    if (history.length === 0) {
-      setScreen('home');
-      return;
-    }
+    if (history.length === 0) { setScreen(routeByRole(user?.role)); return; }
     const prev = history[history.length - 1];
     setHistory(h => h.slice(0, -1));
     setScreen(prev);
   };
 
-  // ── Toast ──
   const showToast = (msg) => {
     setToast({ show: true, msg });
     setTimeout(() => setToast({ show: false, msg: '' }), 2500);
   };
 
-  // ── Login ──
   const handleLogin = (userData) => {
-    console.log('handleLogin called with:', userData);
     setUser(userData);
     setHistory([]);
-    setScreen(userData.role === 'doctor' ? 'owner' : 'home');
+    setScreen(routeByRole(userData.role));
     showToast('👋 Welcome, ' + userData.name + '!');
   };
 
-  // ── Logout ──
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -87,76 +76,45 @@ export default function App() {
     showToast('👋 Logged out successfully');
   };
 
-  // ── Open doctor ──
   const openDoctor = (doctor) => {
     setSelectedDoctor(doctor);
     navigate('docProfile');
   };
 
-  // ── Shared props ──
   const sharedProps = {
-    navigate,
-    goBack,
-    showToast,
-    user,
-    handleLogin,
-    handleLogout,
-    openDoctor,
-    selectedDoctor,
+    navigate, goBack, showToast,
+    user, handleLogin, handleLogout,
+    openDoctor, selectedDoctor,
   };
 
-  // ── Show back button on all screens except these ──
-  const noBackScreens = ['splash', 'auth', 'home'];
-  const showBackBtn   = !noBackScreens.includes(screen);
+  const isDoctor  = user?.role === 'doctor';
+  const isPatient = !isDoctor;
 
   return (
     <div>
+      {toast.show && <Toast msg={toast.msg} />}
 
-      {/* Toast */}
-      {toast.show && <Toast msg={toast.msg}/>}
+      {screen === 'splash'     && <SplashScreen        {...sharedProps} />}
+      {screen === 'auth'       && <AuthScreen          {...sharedProps} />}
 
-      {/* ── Floating Back Button ── */}
-      {showBackBtn && (
-        <button
-          onClick={goBack}
-          style={{
-            position:        'fixed',
-            top:             '16px',
-            left:            'calc(50% - 210px + 16px)',
-            width:           '42px',
-            height:          '42px',
-            borderRadius:    '50%',
-            background:      'rgba(10,47,110,0.9)',
-            border:          'none',
-            color:           '#fff',
-            fontSize:        '20px',
-            cursor:          'pointer',
-            zIndex:          '9999',
-            display:         'flex',
-            alignItems:      'center',
-            justifyContent:  'center',
-            boxShadow:       '0 4px 16px rgba(10,47,110,0.35)',
-            backdropFilter:  'blur(8px)',
-            transition:      'transform 0.15s',
-          }}
-        >
-          ←
-        </button>
-      )}
+      {/* Patient screens */}
+      {screen === 'home'       && isPatient && <HomeScreen          {...sharedProps} />}
+      {screen === 'map'        && isPatient && <MapScreen           {...sharedProps} />}
+      {screen === 'chatbot'    && isPatient && <ChatbotScreen       {...sharedProps} />}
+      {screen === 'doctors'    && isPatient && <DoctorListScreen    {...sharedProps} />}
+      {screen === 'docProfile' && isPatient && <DoctorProfileScreen {...sharedProps} />}
+      {screen === 'emergency'  && isPatient && <EmergencyScreen     {...sharedProps} />}
+      {screen === 'records'    && isPatient && <RecordsScreen       {...sharedProps} />}
+      {screen === 'profile'    && isPatient && <ProfileScreen       {...sharedProps} />}
+      {screen === 'videoCall'  && isPatient && <VideoCallScreen     {...sharedProps} />}
 
-      {/* ── Screens ── */}
-      {screen === 'splash'     && <SplashScreen        {...sharedProps}/>}
-      {screen === 'auth'       && <AuthScreen          {...sharedProps}/>}
-      {screen === 'home'       && <HomeScreen          {...sharedProps}/>}
-      {screen === 'map'        && <MapScreen           {...sharedProps}/>}
-      {screen === 'chatbot'    && <ChatbotScreen       {...sharedProps}/>}
-      {screen === 'doctors'    && <DoctorListScreen    {...sharedProps}/>}
-      {screen === 'docProfile' && <DoctorProfileScreen {...sharedProps}/>}
-      {screen === 'emergency'  && <EmergencyScreen     {...sharedProps}/>}
-      {screen === 'records'    && <RecordsScreen       {...sharedProps}/>}
-      {screen === 'profile'    && <ProfileScreen       {...sharedProps}/>}
-      {screen === 'owner'      && <OwnerDashboard      {...sharedProps}/>}
+      {/* Doctor screen */}
+      {screen === 'owner'      && isDoctor  && <OwnerDashboard      {...sharedProps} />}
+      {screen === 'videoCall'  && isDoctor  && <VideoCallScreen     {...sharedProps} />}
 
+      {/* Safety redirects */}
+      {screen === 'owner' && isPatient && (() => { setScreen('home');  return null; })()}
+      {screen === 'home'  && isDoctor  && (() => { setScreen('owner'); return null; })()}
     </div>
   );
 }

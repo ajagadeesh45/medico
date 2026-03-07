@@ -1,413 +1,256 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 import BottomNav from '../components/BottomNav';
 
-export default function HomeScreen({ navigate, user, showToast }) {
+const isOnline = (online_at) => {
+  if (!online_at) return false;
+  return (Date.now() - new Date(online_at).getTime()) < 2 * 60 * 1000;
+};
 
-  const styles = {
-    screen: {
-      position:      'fixed',
-      inset:         '0',
-      maxWidth:      '420px',
-      margin:        '0 auto',
-      display:       'flex',
-      flexDirection: 'column',
-      background:    '#F4F8FF',
-    },
-    // ── Hero top section ──
-    hero: {
-      background:  'linear-gradient(135deg, #0A2F6E 0%, #0D3B8A 100%)',
-      padding:     '20px 20px 32px',
-      flexShrink:  '0',
-      position:    'relative',
-      overflow:    'hidden',
-    },
-    heroBg: {
-      position:     'absolute',
-      width:        '200px',
-      height:       '200px',
-      background:   'rgba(255,255,255,0.04)',
-      borderRadius: '50%',
-      top:          '-60px',
-      right:        '-40px',
-    },
-    heroTop: {
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'space-between',
-    },
-    greeting: {
-      color:    'rgba(255,255,255,0.55)',
-      fontSize: '14px',
-    },
-    userName: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '24px',
-      fontWeight: '800',
-      color:      '#fff',
-      marginTop:  '2px',
-    },
-    avatar: {
-      width:          '40px',
-      height:         '40px',
-      background:     '#00C896',
-      borderRadius:   '50%',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '20px',
-      cursor:         'pointer',
-      border:         '2px solid rgba(255,255,255,0.3)',
-    },
-    searchBar: {
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '10px',
-      background:   'rgba(255,255,255,0.12)',
-      borderRadius: '14px',
-      padding:      '12px 16px',
-      cursor:       'pointer',
-      border:       '1.5px solid rgba(255,255,255,0.1)',
-      marginTop:    '16px',
-    },
-    searchText: {
-      color:    'rgba(255,255,255,0.4)',
-      fontSize: '15px',
-    },
-    // ── Scroll area ──
-    scroll: {
-      flex:                    '1',
-      overflowY:               'auto',
-      overflowX:               'hidden',
-      WebkitOverflowScrolling: 'touch',
-      paddingBottom:           '80px',
-    },
-    // ── Quick actions grid ──
-    quickGrid: {
-      display:             'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap:                 '10px',
-      padding:             '20px 20px 0',
-    },
-    qCard: {
-      background:   '#fff',
-      borderRadius: '14px',
-      padding:      '14px 8px',
-      textAlign:    'center',
-      cursor:       'pointer',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
-    },
-    qIcon: {
-      fontSize:     '26px',
-      marginBottom: '6px',
-    },
-    qLabel: {
-      fontSize:   '11px',
-      fontWeight: '700',
-      color:      '#0A2F6E',
-    },
-    // ── Emergency banner ──
-    emergencyBanner: {
-      margin:       '16px 20px 0',
-      background:   'linear-gradient(135deg, #FF4757, #C0392B)',
-      borderRadius: '20px',
-      padding:      '16px 18px',
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '14px',
-      cursor:       'pointer',
-    },
-    emergencyText: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '15px',
-      fontWeight: '800',
-      color:      '#fff',
-      flex:       '1',
-    },
-    emergencySub: {
-      fontSize:  '12px',
-      color:     'rgba(255,255,255,0.6)',
-      marginTop: '2px',
-    },
-    // ── Section ──
-    section: {
-      padding: '20px 20px 0',
-    },
-    sectionHeader: {
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'space-between',
-      marginBottom:   '14px',
-    },
-    sectionTitle: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '18px',
-      fontWeight: '800',
-      color:      '#0A2F6E',
-    },
-    sectionLink: {
-      fontSize:   '13px',
-      color:      '#00A878',
-      fontWeight: '600',
-      cursor:     'pointer',
-    },
-    // ── Doctor cards scroll ──
-    docScroll: {
-      display:    'flex',
-      gap:        '12px',
-      overflowX:  'auto',
-      padding:    '0 20px 4px',
-    },
-    docMini: {
-      background:   '#fff',
-      borderRadius: '20px',
-      padding:      '16px 14px',
-      minWidth:     '150px',
-      flexShrink:   '0',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
-      cursor:       'pointer',
-      textAlign:    'center',
-    },
-    docAva: {
-      width:          '52px',
-      height:         '52px',
-      borderRadius:   '50%',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '28px',
-      margin:         '0 auto 10px',
-      background:     '#EEF2FF',
-    },
-    docName: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '13px',
-      fontWeight: '700',
-      color:      '#0A2F6E',
-    },
-    docSpec: {
-      fontSize:  '11px',
-      color:     '#5A6A8A',
-      marginTop: '2px',
-    },
-    docStatus: {
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      gap:            '4px',
-      marginTop:      '8px',
-    },
-    dotGreen: {
-      width:        '7px',
-      height:       '7px',
-      background:   '#00C896',
-      borderRadius: '50%',
-    },
-    statusText: {
-      fontSize:   '11px',
-      fontWeight: '600',
-      color:      '#00A878',
-    },
-    verifiedBadge: {
-      display:      'inline-flex',
-      alignItems:   'center',
-      gap:          '3px',
-      background:   'rgba(0,200,150,0.1)',
-      borderRadius: '50px',
-      padding:      '3px 8px',
-      fontSize:     '10px',
-      fontWeight:   '700',
-      color:        '#00A878',
-      marginTop:    '6px',
-    },
-    // ── Hospital cards ──
-    hospitalCard: {
-      background:   '#fff',
-      borderRadius: '14px',
-      padding:      '14px 16px',
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '12px',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
-      cursor:       'pointer',
-      marginBottom: '10px',
-    },
-    hospitalIcon: {
-      width:          '48px',
-      height:         '48px',
-      background:     '#EEF2FF',
-      borderRadius:   '14px',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '24px',
-      flexShrink:     '0',
-    },
-    hospitalName: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '14px',
-      fontWeight: '700',
-      color:      '#0A2F6E',
-    },
-    hospitalSub: {
-      fontSize:  '12px',
-      color:     '#5A6A8A',
-      marginTop: '2px',
-    },
+// Smart name display — remove "Dr." prefix if already in name
+const doctorName = (full_name) => {
+  if (!full_name) return 'Unknown';
+  const cleaned = full_name.replace(/^Dr\.?\s*/i, '').trim();
+  return cleaned;
+};
+
+export default function HomeScreen({ navigate, user }) {
+
+  const [doctors, setDoctors]     = useState([]);
+  const [loadingDocs, setLoading] = useState(true);
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('id, full_name, specialty, city, consultation_fee, experience, online_at')
+      .eq('role', 'doctor')
+      .then(({ data }) => {
+        // Sort: online first, then offline
+        const sorted = (data || []).sort((a, b) => {
+          const aOnline = isOnline(a.online_at) ? 1 : 0;
+          const bOnline = isOnline(b.online_at) ? 1 : 0;
+          return bOnline - aOnline;
+        });
+        setDoctors(sorted);
+        setLoading(false);
+      });
+  }, []);
+
+  const getAvatar = (name) => {
+    const list = ['👨‍⚕️', '👩‍⚕️', '🧑‍⚕️'];
+    return list[(name || 'A').charCodeAt(0) % list.length];
   };
 
-  const doctors = [
-    { name: 'Dr. Ramesh',  spec: 'General',      emoji: '👨‍⚕️', online: true  },
-    { name: 'Dr. Priya',   spec: 'Paediatric',   emoji: '👩‍⚕️', online: true  },
-    { name: 'Dr. Suresh',  spec: 'Cardiology',   emoji: '👨‍⚕️', online: false },
-    { name: 'Dr. Meena',   spec: 'Dermatology',  emoji: '👩‍⚕️', online: true  },
-  ];
-
-  const hospitals = [
-    { icon: '🏥', name: 'City Government Hospital', sub: '0.3 km • Open 24/7 • Free OPD'     },
-    { icon: '🏨', name: 'Apollo Clinic',            sub: '0.7 km • Open • Multi-speciality'  },
+  const quickActions = [
+    { icon: '👨‍⚕️', label: 'Find\nDoctors',  color: '#EEF2FF', iconBg: '#0A2F6E', screen: 'doctors'   },
+    { icon: '🤖',   label: 'AI\nChat',        color: '#E8FFF7', iconBg: '#00A878', screen: 'chatbot'   },
+    { icon: '🗺️',  label: 'Hospital\nMap',   color: '#FFF3E8', iconBg: '#FF6B35', screen: 'map'       },
+    { icon: '🚨',   label: 'Emergency\nSOS', color: '#FFE8E8', iconBg: '#FF4757', screen: 'emergency' },
   ];
 
   return (
-    <div style={styles.screen}>
+    <div style={{
+      position: 'fixed', inset: '0', maxWidth: '420px', margin: '0 auto',
+      display: 'flex', flexDirection: 'column', background: '#F4F8FF',
+    }}>
 
-      {/* ── Hero ── */}
-      <div style={styles.hero}>
-        <div style={styles.heroBg} />
-        <div style={styles.heroTop}>
-          <div>
-            <div style={styles.greeting}>Good morning 👋</div>
-            <div style={styles.userName}>
-              {user?.name || 'Welcome'}
+      {/* Scrollable area — enough bottom padding for BottomNav */}
+      <div style={{ flex: '1', overflowY: 'auto', paddingBottom: '80px' }}>
+
+        {/* Header */}
+        <div style={{ background: 'linear-gradient(135deg,#0A2F6E,#0D3B8A)', padding: '40px 20px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>{greeting} 👋</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '22px', fontWeight: '800', color: '#fff' }}>
+                {user?.name || 'Welcome'}
+              </div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>How are you feeling today?</div>
             </div>
+            <div
+              onClick={() => navigate('profile')}
+              style={{
+                width: '44px', height: '44px', borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '22px', cursor: 'pointer',
+              }}
+            >🙋</div>
           </div>
-          <div
-            style={styles.avatar}
-            onClick={() => navigate('profile')}
-          >
-            😊
-          </div>
-        </div>
-        <div
-          style={styles.searchBar}
-          onClick={() => showToast('🔍 Search coming soon!')}
-        >
-          <span style={{ fontSize: '18px' }}>🔍</span>
-          <span style={styles.searchText}>
-            Search doctors, hospitals...
-          </span>
-        </div>
-      </div>
 
-      {/* ── Scrollable content ── */}
-      <div style={styles.scroll}>
+          {/* Search bar */}
+          <div
+            onClick={() => navigate('doctors')}
+            style={{
+              marginTop: '16px', display: 'flex', alignItems: 'center',
+              background: 'rgba(255,255,255,0.12)', borderRadius: '12px',
+              padding: '12px 16px', gap: '10px', cursor: 'pointer',
+              border: '1px solid rgba(255,255,255,0.15)',
+            }}
+          >
+            <span>🔍</span>
+            <span style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)' }}>Search doctors, symptoms...</span>
+          </div>
+        </div>
 
         {/* Quick Actions */}
-        <div style={styles.quickGrid}>
-          {[
-            { icon: '🗺️', label: 'Hospital Map', to: 'map'       },
-            { icon: '🤖', label: 'Symptom Check', to: 'chatbot'  },
-            { icon: '📞', label: 'Call Doctor',   to: 'doctors'  },
-            { icon: '🚨', label: 'Emergency',     to: 'emergency'},
-          ].map(item => (
-            <div
-              key={item.to}
-              style={styles.qCard}
-              onClick={() => navigate(item.to)}
-            >
-              <div style={styles.qIcon}>{item.icon}</div>
-              <div style={styles.qLabel}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Emergency Banner */}
-        <div
-          style={styles.emergencyBanner}
-          onClick={() => navigate('emergency')}
-        >
-          <span style={{ fontSize: '32px' }}>🚨</span>
-          <div>
-            <div style={styles.emergencyText}>
-              Emergency? Tap Here
-            </div>
-            <div style={styles.emergencySub}>
-              108 Ambulance • Nearest Hospital
-            </div>
+        <div style={{ padding: '20px 16px 0' }}>
+          <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '16px', fontWeight: '800', color: '#0D1B3E', marginBottom: '12px' }}>
+            Quick Actions
           </div>
-          <span style={{ fontSize: '22px', color: 'rgba(255,255,255,0.6)' }}>›</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {quickActions.map((a, i) => (
+              <div key={i} onClick={() => navigate(a.screen)} style={{
+                background: a.color, borderRadius: '16px', padding: '16px',
+                cursor: 'pointer', boxShadow: '0 2px 8px rgba(10,47,110,0.06)',
+              }}>
+                <div style={{
+                  width: '42px', height: '42px', borderRadius: '12px', background: a.iconBg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '22px', marginBottom: '10px',
+                }}>{a.icon}</div>
+                <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '13px', fontWeight: '800', color: '#0D1B3E', whiteSpace: 'pre-line', lineHeight: '1.3' }}>
+                  {a.label}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Available Doctors */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div style={styles.sectionTitle}>Available Doctors</div>
-            <div
-              style={styles.sectionLink}
-              onClick={() => navigate('doctors')}
-            >
-              See All
+        <div style={{ padding: '20px 16px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '16px', fontWeight: '800', color: '#0D1B3E' }}>
+              Available Doctors
             </div>
-          </div>
-        </div>
-        <div style={styles.docScroll}>
-          {doctors.map((doc, i) => (
-            <div
-              key={i}
-              style={styles.docMini}
-              onClick={() => navigate('doctors')}
-            >
-              <div style={styles.docAva}>{doc.emoji}</div>
-              <div style={styles.docName}>{doc.name}</div>
-              <div style={styles.docSpec}>{doc.spec}</div>
-              <div style={styles.docStatus}>
-                <div style={{
-                  ...styles.dotGreen,
-                  background: doc.online ? '#00C896' : '#9BA8C9'
-                }}/>
-                <span style={{
-                  ...styles.statusText,
-                  color: doc.online ? '#00A878' : '#9BA8C9'
-                }}>
-                  {doc.online ? 'Online' : 'Busy'}
-                </span>
+            {doctors.length > 0 && (
+              <div onClick={() => navigate('doctors')} style={{ fontSize: '13px', color: '#0A2F6E', fontWeight: '700', cursor: 'pointer' }}>
+                See All →
               </div>
-              <div style={styles.verifiedBadge}>✅ Verified</div>
+            )}
+          </div>
+
+          {/* Loading shimmer */}
+          {loadingDocs && (
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {[1,2].map(i => (
+                <div key={i} style={{ flex: '1', height: '130px', borderRadius: '16px', background: '#E8EDF8' }}/>
+              ))}
             </div>
-          ))}
+          )}
+
+          {/* No doctors */}
+          {!loadingDocs && doctors.length === 0 && (
+            <div style={{
+              background: '#fff', borderRadius: '16px', padding: '28px 20px',
+              textAlign: 'center', boxShadow: '0 2px 12px rgba(10,47,110,0.06)',
+            }}>
+              <div style={{ fontSize: '44px', marginBottom: '10px' }}>🩺</div>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '15px', fontWeight: '800', color: '#0A2F6E', marginBottom: '6px' }}>
+                Doctors Joining Soon!
+              </div>
+              <div style={{ fontSize: '12px', color: '#9BA8C9', lineHeight: '1.6', marginBottom: '12px' }}>
+                Verified doctors are setting up their profiles.
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{
+                    width: '8px', height: '8px', borderRadius: '50%', background: '#0A2F6E',
+                    animation: 'bounce 1.2s ease-in-out infinite',
+                    animationDelay: i * 0.2 + 's',
+                  }}/>
+                ))}
+              </div>
+              <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}`}</style>
+            </div>
+          )}
+
+          {/* Doctor cards — horizontal scroll */}
+          {!loadingDocs && doctors.length > 0 && (
+            <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+              {doctors.map(doc => {
+                const online = isOnline(doc.online_at);
+                const name   = doctorName(doc.full_name);
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => navigate('doctors')}
+                    style={{
+                      background: '#fff', borderRadius: '16px', padding: '16px',
+                      minWidth: '140px', maxWidth: '140px', flexShrink: '0',
+                      boxShadow: online ? '0 4px 16px rgba(0,200,150,0.15)' : '0 2px 12px rgba(10,47,110,0.08)',
+                      cursor: 'pointer', textAlign: 'center',
+                      border: online ? '1.5px solid #00C896' : '1.5px solid transparent',
+                    }}
+                  >
+                    {/* Avatar + online dot */}
+                    <div style={{ position: 'relative', display: 'inline-block', marginBottom: '8px' }}>
+                      <div style={{
+                        width: '48px', height: '48px', borderRadius: '14px', background: '#EEF2FF',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px',
+                      }}>
+                        {getAvatar(doc.full_name)}
+                      </div>
+                      <div style={{
+                        position: 'absolute', bottom: '1px', right: '1px',
+                        width: '13px', height: '13px', borderRadius: '50%',
+                        background: online ? '#00C896' : '#CBD5E1',
+                        border: '2px solid #fff',
+                        boxShadow: online ? '0 0 6px rgba(0,200,150,0.6)' : 'none',
+                      }}/>
+                    </div>
+
+                    {/* Name — no double Dr. */}
+                    <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '13px', fontWeight: '800', color: '#0D1B3E', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Dr. {name.split(' ')[0]}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#9BA8C9', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {doc.specialty || 'General Physician'}
+                    </div>
+                    <div style={{ fontSize: '10px', fontWeight: '700', color: online ? '#00A878' : '#94A3B8' }}>
+                      {online ? '🟢 Online' : '⚫ Offline'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Nearest Hospitals */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <div style={styles.sectionTitle}>Nearest Hospitals</div>
-            <div
-              style={styles.sectionLink}
-              onClick={() => navigate('map')}
-            >
-              View Map
-            </div>
-          </div>
-          {hospitals.map((h, i) => (
-            <div
-              key={i}
-              style={styles.hospitalCard}
-              onClick={() => navigate('map')}
-            >
-              <div style={styles.hospitalIcon}>{h.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={styles.hospitalName}>{h.name}</div>
-                <div style={styles.hospitalSub}>{h.sub}</div>
+        {/* AI Health Assistant banner */}
+        <div style={{ padding: '20px 16px' }}>
+          <div
+            onClick={() => navigate('chatbot')}
+            style={{
+              background: 'linear-gradient(135deg,#0A2F6E,#0D3B8A)',
+              borderRadius: '16px', padding: '16px',
+              display: 'flex', gap: '14px', alignItems: 'center', cursor: 'pointer',
+            }}
+          >
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '14px',
+              background: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '24px', flexShrink: '0',
+            }}>🤖</div>
+            <div style={{ flex: '1' }}>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '14px', fontWeight: '800', color: '#fff' }}>
+                AI Health Assistant
               </div>
-              <span style={{ fontSize: '22px', color: '#9BA8C9' }}>›</span>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '2px' }}>
+                Describe symptoms and get instant advice in your language
+              </div>
             </div>
-          ))}
+            <span style={{ fontSize: '20px', color: 'rgba(255,255,255,0.5)' }}>›</span>
+          </div>
         </div>
 
       </div>
 
-      {/* Bottom Nav */}
       <BottomNav active="home" navigate={navigate} />
-
     </div>
   );
 }

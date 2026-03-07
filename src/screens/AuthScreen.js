@@ -1,479 +1,362 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 
-export default function AuthScreen({ handleLogin }) {
+export default function AuthScreen({ handleLogin, showToast }) {
 
-  const [authMode, setAuthMode]             = useState('login');
-  const [role, setRole]                     = useState('patient');
-  const [loginEmail, setLoginEmail]         = useState('');
-  const [loginPassword, setLoginPassword]   = useState('');
-  const [signupName, setSignupName]         = useState('');
-  const [signupEmail, setSignupEmail]       = useState('');
-  const [signupPhone, setSignupPhone]       = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [signupConfirm, setSignupConfirm]   = useState('');
-  const [errors, setErrors]                 = useState({});
-  const [loading, setLoading]               = useState(false);
-  const [showPass, setShowPass]             = useState(false);
-  const [successMsg, setSuccessMsg]         = useState('');
+  const [mode, setMode]         = useState('choose');  // 'choose' | 'patient' | 'doctor'
+  const [isLogin, setIsLogin]   = useState(true);
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName]         = useState('');
+  const [phone, setPhone]       = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading]   = useState(false);
 
-  const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-  const isValidPhone = (p) => /^[6-9]\d{9}$/.test(p.replace(/\s/g, ''));
+  const isPatient = mode === 'patient';
+  const isDoctor  = mode === 'doctor';
+  const accentColor = isPatient ? '#0A2F6E' : '#00A878';
 
-  // ── REAL LOGIN ──
-  const handleLoginSubmit = async () => {
-    const newErrors = {};
-    if (!loginEmail.trim())             newErrors.loginEmail    = 'Email is required';
-    else if (!isValidEmail(loginEmail)) newErrors.loginEmail    = 'Enter valid email';
-    if (!loginPassword.trim())          newErrors.loginPassword = 'Password is required';
-    else if (loginPassword.length < 8)  newErrors.loginPassword = 'Min 8 characters';
+  const getStrength = (p) => {
+    if (p.length === 0) return 0;
+    if (p.length < 6)   return 1;
+    if (p.length < 8)   return 2;
+    if (/[A-Z]/.test(p) && /[0-9]/.test(p)) return 4;
+    return 3;
+  };
+  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const strengthColor = ['', '#FF4757', '#FF6B35', '#FFB800', '#00C896'];
+  const strength = getStrength(password);
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setErrors({});
-    setLoading(true);
-
-    try {
-      console.log('Logging in with Supabase...');
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email:    loginEmail.trim(),
-        password: loginPassword,
-      });
-
-      console.log('Login data:', data);
-      console.log('Login error:', error);
-
-      if (error) {
-        setLoading(false);
-        setErrors({ loginEmail: '❌ ' + error.message });
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-
-      console.log('Profile:', profile);
-
-      const userData = {
-        id:    data.user.id,
-        name:  profile?.full_name || loginEmail.split('@')[0],
-        email: data.user.email,
-        phone: profile?.phone     || '',
-        role:  profile?.role      || role,
-      };
-
-      console.log('Calling handleLogin with:', userData);
-      setLoading(false);
-      handleLogin(userData);
-
-    } catch (err) {
-      console.error('Login exception:', err);
-      setLoading(false);
-      setErrors({ loginEmail: '❌ Something went wrong. Try again.' });
-    }
+  const reset = () => {
+    setEmail(''); setPassword(''); setName(''); setPhone('');
+    setIsLogin(true); setShowPass(false);
   };
 
-  // ── REAL SIGNUP ──
-  const handleSignupSubmit = async () => {
-    const newErrors = {};
-    if (!signupName.trim())               newErrors.signupName     = 'Full name is required';
-    if (!signupEmail.trim())              newErrors.signupEmail    = 'Email is required';
-    else if (!isValidEmail(signupEmail))  newErrors.signupEmail    = 'Enter valid email';
-    if (!signupPhone.trim())              newErrors.signupPhone    = 'Phone is required';
-    else if (!isValidPhone(signupPhone))  newErrors.signupPhone    = 'Enter valid 10 digit number';
-    if (!signupPassword.trim())           newErrors.signupPassword = 'Password is required';
-    else if (signupPassword.length < 8)   newErrors.signupPassword = 'Min 8 characters';
-    if (signupConfirm !== signupPassword) newErrors.signupConfirm  = 'Passwords do not match';
+  const handleSubmit = async () => {
+    if (!email || !password)             { showToast('⚠️ Enter email and password'); return; }
+    if (!isLogin && !name.trim())        { showToast('⚠️ Enter your name'); return; }
+    if (!isLogin && password.length < 8) { showToast('⚠️ Password must be 8+ characters'); return; }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setErrors({});
     setLoading(true);
-
     try {
-      console.log('Signing up with Supabase...');
+      if (isLogin) {
+        // ── LOGIN ──
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) { showToast('❌ ' + error.message); setLoading(false); return; }
 
-      const { data, error } = await supabase.auth.signUp({
-        email:    signupEmail.trim(),
-        password: signupPassword,
-      });
+        const { data: profile } = await supabase
+          .from('profiles').select('*').eq('id', data.user.id).single();
 
-      console.log('Signup data:', data);
-      console.log('Signup error:', error);
+        // Use role from DB — never trust what user selected on login
+        const dbRole = profile?.role || mode;
 
-      if (error) {
-        setLoading(false);
-        setErrors({ signupEmail: '❌ ' + error.message });
-        return;
-      }
+        // If doctor tries patient login or vice versa — block
+        if (dbRole !== mode) {
+          showToast('❌ Wrong portal! You are a ' + dbRole + '. Please use the ' + dbRole + ' login.');
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          id:        data.user.id,
-          full_name: signupName.trim(),
-          email:     signupEmail.trim(),
-          phone:     signupPhone.trim(),
-          role:      role,
+        handleLogin({
+          id:    data.user.id,
+          name:  profile?.full_name || email.split('@')[0],
+          email: data.user.email,
+          phone: profile?.phone || '',
+          role:  dbRole,
         });
 
-      console.log('Profile error:', profileError);
+      } else {
+        // ── SIGN UP ──
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+        if (error) { showToast('❌ ' + error.message); setLoading(false); return; }
 
-      setLoading(false);
+        // Save profile with the role from choose screen
+        await supabase.from('profiles').upsert({
+          id:        data.user.id,
+          full_name: name.trim(),
+          email:     email.trim(),
+          phone:     phone.trim(),
+          role:      mode,   // ← locked from choose screen
+        });
 
-      if (profileError) {
-        setErrors({ signupEmail: '❌ ' + profileError.message });
-        return;
+        handleLogin({
+          id:    data.user.id,
+          name:  name.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          role:  mode,
+        });
       }
-
-      setSuccessMsg('✅ Account created! You can now login.');
-      setAuthMode('login');
-      setLoginEmail(signupEmail.trim());
-
-    } catch (err) {
-      console.error('Signup exception:', err);
-      setLoading(false);
-      setErrors({ signupEmail: '❌ Something went wrong. Try again.' });
+    } catch (e) {
+      showToast('❌ Something went wrong. Try again.');
     }
+    setLoading(false);
   };
 
-  const getStrength = (pass) => {
-    let s = 0;
-    if (pass.length >= 8)          s++;
-    if (/[A-Z]/.test(pass))        s++;
-    if (/[0-9]/.test(pass))        s++;
-    if (/[^A-Za-z0-9]/.test(pass)) s++;
-    return s;
+  const inp = {
+    width:        '100%',
+    padding:      '14px 16px',
+    border:       '2px solid #E8EDF8',
+    borderRadius: '12px',
+    fontSize:     '15px',
+    color:        '#0D1B3E',
+    outline:      'none',
+    background:   '#F4F8FF',
+    boxSizing:    'border-box',
+    fontFamily:   "'DM Sans', sans-serif",
   };
 
-  const strength = getStrength(
-    authMode === 'login' ? loginPassword : signupPassword
-  );
-
-  const st = {
-    screen: {
-      position:'fixed', inset:'0', maxWidth:'420px',
-      margin:'0 auto', background:'#0A2F6E',
-      display:'flex', flexDirection:'column', justifyContent:'flex-end',
-    },
-    hero: {
-      position:'absolute', top:'0', left:'0', right:'0', height:'35%',
-      display:'flex', flexDirection:'column', alignItems:'center',
-      justifyContent:'center', gap:'8px',
-    },
-    heroIcon:  { fontSize:'48px', animation:'bounce 2s ease-in-out infinite' },
-    heroTitle: { fontFamily:"'Syne',sans-serif", fontSize:'28px', fontWeight:'800', color:'#fff' },
-    heroSub:   { fontSize:'13px', color:'rgba(255,255,255,0.45)' },
-    card: {
-      background:'#fff', borderRadius:'32px 32px 0 0',
-      padding:'24px 24px 40px', position:'relative',
-      zIndex:'2', maxHeight:'75vh', overflowY:'auto',
-    },
-    tabs: {
-      display:'flex', background:'#EEF2FF',
-      borderRadius:'12px', padding:'4px', marginBottom:'16px',
-    },
-    tab: {
-      flex:'1', padding:'11px', textAlign:'center',
-      borderRadius:'9px', fontFamily:"'Syne',sans-serif",
-      fontWeight:'700', fontSize:'14px', cursor:'pointer',
-      color:'#5A6A8A', border:'none', background:'transparent',
-    },
-    tabActive: {
-      flex:'1', padding:'11px', textAlign:'center',
-      borderRadius:'9px', fontFamily:"'Syne',sans-serif",
-      fontWeight:'700', fontSize:'14px', cursor:'pointer',
-      color:'#0A2F6E', border:'none', background:'#fff',
-      boxShadow:'0 2px 12px rgba(10,47,110,0.08)',
-    },
-    roleRow:        { display:'flex', gap:'10px', marginBottom:'16px' },
-    roleCard:       { flex:'1', border:'2px solid #D1D8F0', borderRadius:'14px', padding:'12px 10px', textAlign:'center', cursor:'pointer', background:'#fff' },
-    roleCardActive: { flex:'1', border:'2px solid #0A2F6E', borderRadius:'14px', padding:'12px 10px', textAlign:'center', cursor:'pointer', background:'#EEF2FF' },
-    roleIcon:        { fontSize:'22px', marginBottom:'4px', display:'block' },
-    roleLabel:       { fontSize:'13px', fontWeight:'700', color:'#5A6A8A' },
-    roleLabelActive: { fontSize:'13px', fontWeight:'700', color:'#0A2F6E' },
-    formGroup: { marginBottom:'12px' },
-    label: {
-      display:'block', fontSize:'11px', fontWeight:'700',
-      color:'#5A6A8A', textTransform:'uppercase',
-      letterSpacing:'0.5px', marginBottom:'5px',
-    },
-    inputWrap: { position:'relative' },
-    input: {
-      width:'100%', padding:'12px 16px',
-      border:'2px solid #D1D8F0', borderRadius:'12px',
-      fontFamily:"'DM Sans',sans-serif", fontSize:'15px',
-      color:'#0D1B3E', outline:'none', background:'#fff',
-      boxSizing:'border-box',
-    },
-    inputErr: {
-      width:'100%', padding:'12px 16px',
-      border:'2px solid #FF4757', borderRadius:'12px',
-      fontFamily:"'DM Sans',sans-serif", fontSize:'15px',
-      color:'#0D1B3E', outline:'none', background:'#fff',
-      boxSizing:'border-box',
-    },
-    errText:    { fontSize:'12px', color:'#FF4757', marginTop:'4px', fontWeight:'500' },
-    successBox: {
-      background:'rgba(0,200,150,0.1)', border:'1.5px solid #00C896',
-      borderRadius:'12px', padding:'12px 16px', marginBottom:'14px',
-      fontSize:'13px', color:'#00A878', fontWeight:'600',
-    },
-    eyeBtn: {
-      position:'absolute', right:'14px', top:'50%',
-      transform:'translateY(-50%)', background:'none',
-      border:'none', cursor:'pointer', fontSize:'16px', color:'#9BA8C9',
-    },
-    submitBtn: {
-      width:'100%', padding:'15px',
-      background: loading ? '#9BA8C9' : '#0A2F6E',
-      color:'#fff', border:'none', borderRadius:'14px',
-      fontFamily:"'Syne',sans-serif", fontSize:'16px',
-      fontWeight:'800', cursor: loading ? 'not-allowed' : 'pointer',
-      marginTop:'8px',
-    },
-    strengthRow: { display:'flex', gap:'4px', marginTop:'6px' },
-    strengthBar: (s, i) => ({
-      flex:'1', height:'3px', borderRadius:'2px',
-      background: i < s ? (
-        s <= 1 ? '#FF4757' : s <= 2 ? '#FF6B35' :
-        s <= 3 ? '#FFD700' : '#00C896'
-      ) : '#EEF2FF',
-    }),
-    switchText: { textAlign:'center', marginTop:'16px', fontSize:'14px', color:'#5A6A8A' },
-    switchLink: { color:'#0A2F6E', fontWeight:'700', cursor:'pointer' },
+  const lbl = {
+    display: 'block', fontSize: '11px', fontWeight: '700',
+    color: '#5A6A8A', textTransform: 'uppercase',
+    letterSpacing: '0.5px', marginBottom: '6px',
   };
 
-  return (
-    <div style={st.screen}>
+  // ════════════════════════════════
+  // CHOOSE SCREEN
+  // ════════════════════════════════
+  if (mode === 'choose') {
+    return (
+      <div style={{
+        position: 'fixed', inset: '0', maxWidth: '420px', margin: '0 auto',
+        background: 'linear-gradient(160deg,#0A2F6E,#0D3B8A,#0A5C4A)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', padding: '32px 24px',
+      }}>
+        {/* Background circles */}
+        <div style={{ position: 'absolute', top: '-60px', right: '-60px', width: '220px', height: '220px', borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+        <div style={{ position: 'absolute', bottom: '-40px', left: '-40px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(0,200,150,0.06)' }} />
 
-      {/* Hero */}
-      <div style={st.hero}>
-        <div style={st.heroIcon}>🏥</div>
-        <div style={st.heroTitle}>Medico</div>
-        <div style={st.heroSub}>உங்கள் மருத்துவர். எங்கும்.</div>
-      </div>
-
-      {/* Card */}
-      <div style={st.card}>
-
-        {/* Tabs */}
-        <div style={st.tabs}>
-          <button
-            style={authMode === 'login' ? st.tabActive : st.tab}
-            onClick={() => { setAuthMode('login'); setErrors({}); setSuccessMsg(''); }}
-          >Login</button>
-          <button
-            style={authMode === 'signup' ? st.tabActive : st.tab}
-            onClick={() => { setAuthMode('signup'); setErrors({}); setSuccessMsg(''); }}
-          >Sign Up</button>
+        <div style={{ fontSize: '48px', marginBottom: '10px' }}>🩺</div>
+        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '34px', fontWeight: '900', color: '#fff', marginBottom: '6px' }}>
+          Nadi<span style={{ color: '#00C896' }}>Doc</span>
+        </div>
+        <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginBottom: '48px' }}>
+          Choose how you want to continue
         </div>
 
-        {/* Success message */}
-        {successMsg && <div style={st.successBox}>{successMsg}</div>}
-
-        {/* Role selector */}
-        <div style={st.roleRow}>
-          {[
-            { id:'patient', icon:'🙋', label:'Patient' },
-            { id:'doctor',  icon:'👨‍⚕️', label:'Doctor'  },
-          ].map(r => (
-            <div
-              key={r.id}
-              style={role === r.id ? st.roleCardActive : st.roleCard}
-              onClick={() => setRole(r.id)}
-            >
-              <span style={st.roleIcon}>{r.icon}</span>
-              <span style={role === r.id ? st.roleLabelActive : st.roleLabel}>
-                {r.label}
-              </span>
+        {/* Patient */}
+        <div
+          onClick={() => { reset(); setMode('patient'); }}
+          style={{
+            width: '100%', background: '#fff', borderRadius: '20px',
+            padding: '22px', marginBottom: '14px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '16px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          }}
+        >
+          <div style={{
+            width: '58px', height: '58px', borderRadius: '16px', background: '#EEF2FF',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', flexShrink: '0',
+          }}>🙋</div>
+          <div style={{ flex: '1' }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '17px', fontWeight: '800', color: '#0A2F6E' }}>
+              I'm a Patient
             </div>
+            <div style={{ fontSize: '12px', color: '#9BA8C9', marginTop: '3px' }}>
+              Find doctors · Book consultations · AI health advice
+            </div>
+          </div>
+          <span style={{ fontSize: '20px', color: '#C5D0E6' }}>›</span>
+        </div>
+
+        {/* Doctor */}
+        <div
+          onClick={() => { reset(); setMode('doctor'); }}
+          style={{
+            width: '100%', background: '#fff', borderRadius: '20px',
+            padding: '22px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: '16px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          }}
+        >
+          <div style={{
+            width: '58px', height: '58px', borderRadius: '16px', background: '#E8FFF7',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', flexShrink: '0',
+          }}>👨‍⚕️</div>
+          <div style={{ flex: '1' }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '17px', fontWeight: '800', color: '#0A5C4A' }}>
+              I'm a Doctor
+            </div>
+            <div style={{ fontSize: '12px', color: '#9BA8C9', marginTop: '3px' }}>
+              Manage patients · Grow your practice · Earn online
+            </div>
+          </div>
+          <span style={{ fontSize: '20px', color: '#C5D0E6' }}>›</span>
+        </div>
+
+      </div>
+    );
+  }
+
+  // ════════════════════════════════
+  // LOGIN / SIGNUP FORM
+  // ════════════════════════════════
+  return (
+    <div style={{
+      position: 'fixed', inset: '0', maxWidth: '420px', margin: '0 auto',
+      background: '#F4F8FF', display: 'flex', flexDirection: 'column', overflowY: 'auto',
+    }}>
+
+      {/* Colored header */}
+      <div style={{
+        background: isPatient
+          ? 'linear-gradient(135deg,#0A2F6E,#0D3B8A)'
+          : 'linear-gradient(135deg,#0A5C4A,#00A878)',
+        padding: '40px 24px 28px', flexShrink: '0',
+      }}>
+        <button
+          onClick={() => setMode('choose')}
+          style={{
+            background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%',
+            width: '38px', height: '38px', color: '#fff', fontSize: '18px',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px',
+          }}
+        >←</button>
+
+        {/* Role badge */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '8px',
+          background: 'rgba(255,255,255,0.15)', borderRadius: '50px',
+          padding: '6px 14px', marginBottom: '12px',
+        }}>
+          <span style={{ fontSize: '16px' }}>{isPatient ? '🙋' : '👨‍⚕️'}</span>
+          <span style={{ fontSize: '12px', fontWeight: '800', color: '#fff', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            {isPatient ? 'Patient Portal' : 'Doctor Portal'}
+          </span>
+        </div>
+
+        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '22px', fontWeight: '800', color: '#fff' }}>
+          {isLogin ? 'Welcome back!' : (isPatient ? 'Join as Patient' : 'Join as Doctor')}
+        </div>
+        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginTop: '4px' }}>
+          Nadi<span style={{ color: '#00C896', fontWeight: '700' }}>Doc</span>
+          {isPatient ? ' — Your health, our priority' : ' — Grow your practice online'}
+        </div>
+      </div>
+
+      {/* Form */}
+      <div style={{ flex: '1', padding: '24px' }}>
+
+        {/* Login / Signup toggle */}
+        <div style={{ display: 'flex', background: '#E8EDF8', borderRadius: '12px', padding: '4px', marginBottom: '20px' }}>
+          {['Login', 'Sign Up'].map((t, i) => (
+            <div
+              key={t}
+              onClick={() => setIsLogin(i === 0)}
+              style={{
+                flex: '1', padding: '10px', textAlign: 'center', borderRadius: '10px',
+                fontSize: '14px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s',
+                background: isLogin === (i === 0) ? '#fff' : 'transparent',
+                color:      isLogin === (i === 0) ? accentColor : '#9BA8C9',
+                boxShadow:  isLogin === (i === 0) ? '0 2px 8px rgba(10,47,110,0.1)' : 'none',
+              }}
+            >{t}</div>
           ))}
         </div>
 
-        {/* ── LOGIN FORM ── */}
-        {authMode === 'login' && (
-          <>
-            <div style={st.formGroup}>
-              <label style={st.label}>Email Address</label>
-              <input
-                style={errors.loginEmail ? st.inputErr : st.input}
-                placeholder="your@email.com"
-                value={loginEmail}
-                onChange={e => {
-                  setLoginEmail(e.target.value);
-                  setErrors(err => ({...err, loginEmail:''}));
-                }}
-              />
-              {errors.loginEmail && (
-                <div style={st.errText}>{errors.loginEmail}</div>
-              )}
-            </div>
-
-            <div style={st.formGroup}>
-              <label style={st.label}>Password</label>
-              <div style={st.inputWrap}>
-                <input
-                  style={errors.loginPassword ? st.inputErr : st.input}
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="Min 8 characters"
-                  value={loginPassword}
-                  onChange={e => {
-                    setLoginPassword(e.target.value);
-                    setErrors(err => ({...err, loginPassword:''}));
-                  }}
-                />
-                <button
-                  style={st.eyeBtn}
-                  onClick={() => setShowPass(!showPass)}
-                >
-                  {showPass ? '🙈' : '👁️'}
-                </button>
-              </div>
-              {errors.loginPassword && (
-                <div style={st.errText}>{errors.loginPassword}</div>
-              )}
-            </div>
-
-            <div style={{textAlign:'right', marginBottom:'8px'}}>
-              <span style={{fontSize:'13px', color:'#0A2F6E', fontWeight:'600', cursor:'pointer'}}>
-                Forgot Password?
-              </span>
-            </div>
-          </>
+        {/* Name */}
+        {!isLogin && (
+          <div style={{ marginBottom: '14px' }}>
+            <label style={lbl}>{isPatient ? 'Full Name' : 'Doctor Name'}</label>
+            <input style={inp} placeholder={isPatient ? 'Your full name' : 'Dr. Your Name'} value={name} onChange={e => setName(e.target.value)} />
+          </div>
         )}
 
-        {/* ── SIGNUP FORM ── */}
-        {authMode === 'signup' && (
-          <>
-            <div style={st.formGroup}>
-              <label style={st.label}>Full Name</label>
-              <input
-                style={errors.signupName ? st.inputErr : st.input}
-                placeholder="Your full name"
-                value={signupName}
-                onChange={e => {
-                  setSignupName(e.target.value);
-                  setErrors(err => ({...err, signupName:''}));
-                }}
-              />
-              {errors.signupName && <div style={st.errText}>{errors.signupName}</div>}
-            </div>
-
-            <div style={st.formGroup}>
-              <label style={st.label}>Email Address</label>
-              <input
-                style={errors.signupEmail ? st.inputErr : st.input}
-                placeholder="your@email.com"
-                value={signupEmail}
-                onChange={e => {
-                  setSignupEmail(e.target.value);
-                  setErrors(err => ({...err, signupEmail:''}));
-                }}
-              />
-              {errors.signupEmail && <div style={st.errText}>{errors.signupEmail}</div>}
-            </div>
-
-            <div style={st.formGroup}>
-              <label style={st.label}>Phone Number</label>
-              <input
-                style={errors.signupPhone ? st.inputErr : st.input}
-                placeholder="10 digit mobile number"
-                value={signupPhone}
-                maxLength={10}
-                onChange={e => {
-                  setSignupPhone(e.target.value.replace(/\D/g,''));
-                  setErrors(err => ({...err, signupPhone:''}));
-                }}
-              />
-              {errors.signupPhone && <div style={st.errText}>{errors.signupPhone}</div>}
-            </div>
-
-            <div style={st.formGroup}>
-              <label style={st.label}>Password</label>
-              <div style={st.inputWrap}>
-                <input
-                  style={errors.signupPassword ? st.inputErr : st.input}
-                  type={showPass ? 'text' : 'password'}
-                  placeholder="Min 8 characters"
-                  value={signupPassword}
-                  onChange={e => {
-                    setSignupPassword(e.target.value);
-                    setErrors(err => ({...err, signupPassword:''}));
-                  }}
-                />
-                <button
-                  style={st.eyeBtn}
-                  onClick={() => setShowPass(!showPass)}
-                >
-                  {showPass ? '🙈' : '👁️'}
-                </button>
-              </div>
-              <div style={st.strengthRow}>
-                {[0,1,2,3].map(i => (
-                  <div key={i} style={st.strengthBar(strength, i)}/>
-                ))}
-              </div>
-              <div style={{fontSize:'11px', color:'#9BA8C9', marginTop:'4px'}}>
-                {strength === 0 ? '' : strength === 1 ? '🔴 Weak' :
-                 strength === 2 ? '🟠 Fair' : strength === 3 ? '🟡 Good' : '🟢 Strong'}
-              </div>
-              {errors.signupPassword && <div style={st.errText}>{errors.signupPassword}</div>}
-            </div>
-
-            <div style={st.formGroup}>
-              <label style={st.label}>Confirm Password</label>
-              <input
-                style={errors.signupConfirm ? st.inputErr : st.input}
-                type="password"
-                placeholder="Re-enter password"
-                value={signupConfirm}
-                onChange={e => {
-                  setSignupConfirm(e.target.value);
-                  setErrors(err => ({...err, signupConfirm:''}));
-                }}
-              />
-              {errors.signupConfirm && <div style={st.errText}>{errors.signupConfirm}</div>}
-            </div>
-          </>
+        {/* Phone */}
+        {!isLogin && (
+          <div style={{ marginBottom: '14px' }}>
+            <label style={lbl}>Phone Number</label>
+            <input style={inp} placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} type="tel" />
+          </div>
         )}
 
-        {/* Submit button */}
+        {/* Email */}
+        <div style={{ marginBottom: '14px' }}>
+          <label style={lbl}>Email Address</label>
+          <input style={inp} placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+        </div>
+
+        {/* Password */}
+        <div style={{ marginBottom: '6px' }}>
+          <label style={lbl}>Password</label>
+          <div style={{ position: 'relative' }}>
+            <input
+              style={{ ...inp, paddingRight: '46px' }}
+              placeholder="Min 8 characters"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              type={showPass ? 'text' : 'password'}
+            />
+            <span
+              onClick={() => setShowPass(!showPass)}
+              style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '18px' }}
+            >
+              {showPass ? '🙈' : '👁️'}
+            </span>
+          </div>
+        </div>
+
+        {/* Strength meter */}
+        {!isLogin && password.length > 0 && (
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+              {[1,2,3,4].map(i => (
+                <div key={i} style={{
+                  flex: '1', height: '4px', borderRadius: '2px',
+                  background: i <= strength ? strengthColor[strength] : '#E8EDF8',
+                  transition: 'background 0.3s',
+                }}/>
+              ))}
+            </div>
+            <div style={{ fontSize: '11px', color: strengthColor[strength], fontWeight: '700', marginTop: '4px' }}>
+              {strengthLabel[strength]}
+            </div>
+          </div>
+        )}
+
+        {/* Forgot */}
+        {isLogin && (
+          <div style={{ textAlign: 'right', marginBottom: '20px' }}>
+            <span style={{ fontSize: '13px', color: accentColor, fontWeight: '700', cursor: 'pointer' }}>
+              Forgot Password?
+            </span>
+          </div>
+        )}
+
+        {/* Submit */}
         <button
-          style={st.submitBtn}
-          onClick={authMode === 'login'
-            ? handleLoginSubmit
-            : handleSignupSubmit}
+          onClick={handleSubmit}
           disabled={loading}
+          style={{
+            width: '100%', padding: '16px',
+            background: loading ? '#9BA8C9' : accentColor,
+            color: '#fff', border: 'none', borderRadius: '14px',
+            fontFamily: "'Syne',sans-serif", fontSize: '16px', fontWeight: '800',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            marginTop: isLogin ? '0' : '8px',
+            boxShadow: loading ? 'none' : '0 6px 20px rgba(0,0,0,0.2)',
+          }}
         >
-          {loading ? '⏳ Please wait...' :
-           authMode === 'login' ? 'Login →' : 'Create Account →'}
+          {loading
+            ? '⏳ Please wait...'
+            : isLogin
+              ? `Login as ${isPatient ? 'Patient' : 'Doctor'} →`
+              : `Create ${isPatient ? 'Patient' : 'Doctor'} Account →`}
         </button>
 
-        {/* Switch mode */}
-        <div style={st.switchText}>
-          {authMode === 'login'
-            ? "Don't have an account? "
-            : 'Already have an account? '}
+        {/* Switch */}
+        <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '14px', color: '#9BA8C9' }}>
+          {isLogin ? "Don't have an account? " : 'Already have an account? '}
           <span
-            style={st.switchLink}
-            onClick={() => {
-              setAuthMode(authMode === 'login' ? 'signup' : 'login');
-              setErrors({});
-              setSuccessMsg('');
-            }}
+            onClick={() => setIsLogin(!isLogin)}
+            style={{ color: accentColor, fontWeight: '700', cursor: 'pointer' }}
           >
-            {authMode === 'login' ? 'Sign Up' : 'Login'}
+            {isLogin ? 'Sign Up' : 'Login'}
           </span>
         </div>
 

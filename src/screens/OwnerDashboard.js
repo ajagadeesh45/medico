@@ -15,6 +15,7 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
   const [education, setEducation]   = useState('');
   const [languages, setLanguages]   = useState('');
 
+  // ── Load profile ──
   useEffect(() => {
     if (!user?.id) return;
     supabase.from('profiles').select('*').eq('id', user.id).single().then(({ data }) => {
@@ -28,6 +29,21 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
         setLanguages(data.languages        || '');
       }
     });
+  }, [user]);
+
+  // ── Heartbeat: mark doctor online every 30 seconds ──
+  useEffect(() => {
+    if (!user?.id) return;
+    const ping = () => {
+      supabase.from('profiles').update({ online_at: new Date().toISOString() }).eq('id', user.id);
+    };
+    ping(); // immediate on login
+    const interval = setInterval(ping, 30000);
+    return () => {
+      clearInterval(interval);
+      // Mark offline on logout/unmount
+      supabase.from('profiles').update({ online_at: null }).eq('id', user.id);
+    };
   }, [user]);
 
   const saveProfile = async () => {
@@ -71,19 +87,16 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
         rightElement={
           <button onClick={handleLogout} style={{
             padding: '6px 12px', background: 'rgba(255,255,255,0.15)',
-            border: 'none', borderRadius: '8px', color: '#fff', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
-          }}>
-            Logout
-          </button>
+            border: 'none', borderRadius: '8px', color: '#fff',
+            fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+          }}>Logout</button>
         }
       />
 
-      {/* Incomplete banner */}
       {!isComplete && (
         <div style={{
           background: '#FFF3CD', padding: '10px 16px', fontSize: '13px',
-          color: '#856404', fontWeight: '600', display: 'flex', gap: '8px',
-          alignItems: 'center', flexShrink: '0',
+          color: '#856404', fontWeight: '600', display: 'flex', alignItems: 'center', flexShrink: '0',
         }}>
           ⚠️ Complete your profile so patients can find you!
           <span onClick={() => setTab('profile')} style={{ color: '#0A2F6E', fontWeight: '800', cursor: 'pointer', marginLeft: 'auto' }}>
@@ -104,9 +117,7 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
             fontSize: '11px', fontWeight: '700', cursor: 'pointer',
             color: tab === t.id ? '#0A2F6E' : '#9BA8C9',
             borderBottom: tab === t.id ? '2px solid #0A2F6E' : '2px solid transparent',
-          }}>
-            {t.label}
-          </div>
+          }}>{t.label}</div>
         ))}
       </div>
 
@@ -123,13 +134,15 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
                 {isComplete ? 'Your profile is live — patients can find you!' : 'Complete your profile to appear in the doctor list.'}
               </div>
               <div style={{
-                marginTop: '10px', display: 'inline-block', borderRadius: '50px',
-                padding: '4px 12px', fontSize: '12px', fontWeight: '700',
+                marginTop: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                borderRadius: '50px', padding: '4px 12px', fontSize: '12px', fontWeight: '700',
                 background: isComplete ? 'rgba(0,200,150,0.2)' : 'rgba(255,100,0,0.2)',
                 color:      isComplete ? '#00C896' : '#FF6B35',
               }}>
-                {isComplete ? '🟢 Profile Complete' : '🔴 Profile Incomplete'}
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isComplete ? '#00C896' : '#FF6B35', animation: isComplete ? 'ping 1.5s infinite' : 'none' }}/>
+                {isComplete ? 'You are Online' : 'Profile Incomplete'}
               </div>
+              <style>{`@keyframes ping { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }`}</style>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
@@ -147,9 +160,7 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
               ))}
             </div>
 
-            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: '800', fontSize: '15px', color: '#0D1B3E', marginBottom: '10px' }}>
-              Quick Actions
-            </div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: '800', fontSize: '15px', color: '#0D1B3E', marginBottom: '10px' }}>Quick Actions</div>
             <div style={{ display: 'flex', gap: '10px' }}>
               {[
                 { icon: '👤', label: 'Edit Profile', action: () => setTab('profile') },
@@ -173,20 +184,16 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
         {tab === 'patients' && (
           <div style={{ textAlign: 'center', padding: '60px 24px' }}>
             <div style={{ fontSize: '56px' }}>📅</div>
-            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '18px', fontWeight: '800', color: '#0A2F6E', marginTop: '12px' }}>
-              No Patients Yet
-            </div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '18px', fontWeight: '800', color: '#0A2F6E', marginTop: '12px' }}>No Patients Yet</div>
             <div style={{ fontSize: '14px', color: '#9BA8C9', lineHeight: '1.6', marginTop: '8px' }}>
-              Patient consultations will appear here once they book a session with you.
+              Patient consultations will appear here once they book a session.
             </div>
             {!isComplete && (
               <div onClick={() => setTab('profile')} style={{
-                marginTop: '16px', display: 'inline-block',
-                background: '#0A2F6E', color: '#fff', borderRadius: '12px',
-                padding: '12px 24px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-              }}>
-                Complete Profile First →
-              </div>
+                marginTop: '16px', display: 'inline-block', background: '#0A2F6E',
+                color: '#fff', borderRadius: '12px', padding: '12px 24px',
+                fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+              }}>Complete Profile First →</div>
             )}
           </div>
         )}
@@ -195,7 +202,7 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
         {tab === 'profile' && (
           <>
             <div style={{ background: '#EEF2FF', borderRadius: '12px', padding: '12px 14px', marginBottom: '4px', fontSize: '13px', color: '#5A6A8A', lineHeight: '1.6' }}>
-              💡 Fill your details — you'll appear in the <strong>Find Doctors</strong> tab for patients to find you.
+              💡 Fill your details to appear in the <strong>Find Doctors</strong> tab.
             </div>
 
             <label style={lbl}>Specialty *</label>
@@ -217,31 +224,23 @@ export default function OwnerDashboard({ user, handleLogout, showToast }) {
             <input style={inp} placeholder="e.g. MBBS - MMC, MD - Apollo" value={education} onChange={e => setEducation(e.target.value)} />
 
             <label style={lbl}>About / Bio</label>
-            <textarea
-              style={{ ...inp, minHeight: '90px', resize: 'vertical' }}
+            <textarea style={{ ...inp, minHeight: '90px', resize: 'vertical' }}
               placeholder="Write a short bio for patients..."
-              value={bio}
-              onChange={e => setBio(e.target.value)}
-            />
+              value={bio} onChange={e => setBio(e.target.value)} />
 
-            <button
-              onClick={saveProfile}
-              disabled={saving}
-              style={{
-                width: '100%', marginTop: '20px', padding: '16px',
-                background: saving ? '#9BA8C9' : '#0A2F6E', color: '#fff',
-                border: 'none', borderRadius: '14px',
-                fontFamily: "'Syne',sans-serif", fontSize: '16px', fontWeight: '800',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
+            <button onClick={saveProfile} disabled={saving} style={{
+              width: '100%', marginTop: '20px', padding: '16px',
+              background: saving ? '#9BA8C9' : '#0A2F6E', color: '#fff',
+              border: 'none', borderRadius: '14px',
+              fontFamily: "'Syne',sans-serif", fontSize: '16px', fontWeight: '800',
+              cursor: saving ? 'not-allowed' : 'pointer',
+            }}>
               {saving ? '⏳ Saving...' : '✅ Save Profile'}
             </button>
 
-            {/* Logout at bottom */}
             <div onClick={handleLogout} style={{
-              marginTop: '16px', marginBottom: '8px',
-              background: '#FFF0F0', borderRadius: '14px', padding: '14px 16px',
+              marginTop: '16px', marginBottom: '8px', background: '#FFF0F0',
+              borderRadius: '14px', padding: '14px 16px',
               display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer',
             }}>
               <span style={{ fontSize: '20px' }}>🚪</span>
