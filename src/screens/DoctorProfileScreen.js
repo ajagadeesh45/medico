@@ -1,394 +1,175 @@
 import React, { useState } from 'react';
+import TopBar from '../components/TopBar';
 
-export default function DoctorProfileScreen({
-  goBack,
-  showToast,
-  selectedDoctor,
-}) {
+export default function DoctorProfileScreen({ goBack, selectedDoctor, showToast }) {
 
-  const [selectedSlot, setSelectedSlot] = useState('11:00 AM');
+  const [tab, setTab] = useState('about');
+  const doc = selectedDoctor;
 
-  // Fallback if no doctor selected
-  const doc = selectedDoctor || {
-    name:     'Dr. Ramesh Kumar',
-    degree:   'MBBS, MD',
-    spec:     'General Physician',
-    emoji:    '👨‍⚕️',
-    rating:   4.8,
-    patients: '2,400',
-    exp:      '12 yrs',
-    fee:      '₹200',
-    online:   true,
-    langs:    ['Tamil', 'English', 'Hindi'],
+  if (!doc) {
+    return (
+      <div style={{
+        position: 'fixed', inset: '0', maxWidth: '420px', margin: '0 auto',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', background: '#F4F8FF', gap: '12px',
+      }}>
+        <div style={{ fontSize: '48px' }}>😕</div>
+        <div style={{ fontSize: '16px', fontWeight: '700', color: '#0A2F6E' }}>Doctor not found</div>
+        <button onClick={goBack} style={{ padding: '10px 24px', background: '#0A2F6E', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' }}>
+          ← Go Back
+        </button>
+      </div>
+    );
+  }
+
+  const getAvatar = (name) => {
+    const list = ['👨‍⚕️', '👩‍⚕️', '🧑‍⚕️'];
+    return list[(name || '').charCodeAt(0) % list.length];
   };
 
-  const slots = [
-    { time: '10:00 AM', full: false },
-    { time: '11:00 AM', full: false },
-    { time: '12:00 PM', full: true  },
-    { time: '2:00 PM',  full: false },
-    { time: '3:00 PM',  full: false },
-    { time: '4:00 PM',  full: true  },
-    { time: '5:00 PM',  full: false },
-    { time: '6:00 PM',  full: false },
-  ];
-
-  const styles = {
-    screen: {
-      position:      'fixed',
-      inset:         '0',
-      maxWidth:      '420px',
-      margin:        '0 auto',
-      display:       'flex',
-      flexDirection: 'column',
-      background:    '#F4F8FF',
-      zIndex:        '50',
-    },
-    // Hero
-    hero: {
-      background:  'linear-gradient(160deg, #0A2F6E 0%, #0D3B8A 100%)',
-      padding:     '20px 20px 40px',
-      flexShrink:  '0',
-      position:    'relative',
-      overflow:    'hidden',
-    },
-    heroBg: {
-      position:     'absolute',
-      width:        '200px',
-      height:       '200px',
-      background:   'rgba(255,255,255,0.04)',
-      borderRadius: '50%',
-      top:          '-60px',
-      right:        '-40px',
-    },
-    backBtn: {
-      width:          '40px',
-      height:         '40px',
-      borderRadius:   '50%',
-      border:         'none',
-      background:     'rgba(255,255,255,0.15)',
-      color:          '#fff',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '18px',
-      cursor:         'pointer',
-      marginBottom:   '16px',
-    },
-    ava: {
-      width:          '80px',
-      height:         '80px',
-      borderRadius:   '24px',
-      background:     'rgba(255,255,255,0.15)',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '44px',
-      border:         '2px solid rgba(255,255,255,0.2)',
-      marginBottom:   '12px',
-    },
-    docName: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '24px',
-      fontWeight: '800',
-      color:      '#fff',
-    },
-    docDegree: {
-      fontSize:  '14px',
-      color:     'rgba(255,255,255,0.55)',
-      marginTop: '2px',
-    },
-    verifiedBadge: {
-      display:      'inline-flex',
-      alignItems:   'center',
-      gap:          '5px',
-      background:   'rgba(0,200,150,0.2)',
-      borderRadius: '50px',
-      padding:      '5px 14px',
-      fontSize:     '12px',
-      fontWeight:   '700',
-      color:        '#00C896',
-      marginTop:    '8px',
-    },
-    numsRow: {
-      display:   'flex',
-      gap:       '24px',
-      marginTop: '16px',
-    },
-    numItem: {
-      textAlign: 'center',
-    },
-    numVal: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '20px',
-      fontWeight: '800',
-      color:      '#fff',
-    },
-    numLbl: {
-      fontSize:  '11px',
-      color:     'rgba(255,255,255,0.45)',
-      marginTop: '2px',
-    },
-    // Body
-    body: {
-      background:              '#fff',
-      borderRadius:            '28px 28px 0 0',
-      marginTop:               '-20px',
-      padding:                 '24px 20px',
-      flex:                    '1',
-      overflowY:               'auto',
-      WebkitOverflowScrolling: 'touch',
-      paddingBottom:           '100px',
-    },
-    section: {
-      marginBottom: '20px',
-    },
-    secTitle: {
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '15px',
-      fontWeight:   '700',
-      color:        '#0A2F6E',
-      marginBottom: '10px',
-    },
-    about: {
-      fontSize:   '14px',
-      color:      '#5A6A8A',
-      lineHeight: '1.6',
-    },
-    // Info rows
-    infoRow: {
-      display:     'flex',
-      alignItems:  'center',
-      gap:         '12px',
-      padding:     '10px 0',
-      borderBottom:'1px solid #EEF2FF',
-    },
-    infoIcon: {
-      width:          '36px',
-      height:         '36px',
-      background:     '#EEF2FF',
-      borderRadius:   '10px',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '18px',
-      flexShrink:     '0',
-    },
-    infoLabel: {
-      fontSize:  '12px',
-      color:     '#5A6A8A',
-    },
-    infoVal: {
-      fontSize:   '14px',
-      fontWeight: '600',
-      color:      '#0A2F6E',
-    },
-    // Slots
-    slotsGrid: {
-      display:   'flex',
-      gap:       '8px',
-      flexWrap:  'wrap',
-    },
-    slot: {
-      padding:      '10px 16px',
-      border:       '2px solid #D1D8F0',
-      borderRadius: '10px',
-      fontSize:     '13px',
-      fontWeight:   '600',
-      color:        '#5A6A8A',
-      cursor:       'pointer',
-      background:   '#fff',
-    },
-    slotActive: {
-      padding:      '10px 16px',
-      border:       '2px solid #0A2F6E',
-      borderRadius: '10px',
-      fontSize:     '13px',
-      fontWeight:   '600',
-      color:        '#fff',
-      cursor:       'pointer',
-      background:   '#0A2F6E',
-    },
-    slotFull: {
-      padding:      '10px 16px',
-      border:       '2px solid #EEF2FF',
-      borderRadius: '10px',
-      fontSize:     '13px',
-      fontWeight:   '600',
-      color:        '#9BA8C9',
-      cursor:       'not-allowed',
-      background:   '#EEF2FF',
-    },
-    // Bottom buttons
-    btnsRow: {
-      position:   'fixed',
-      bottom:     '0',
-      left:       '50%',
-      transform:  'translateX(-50%)',
-      width:      '100%',
-      maxWidth:   '420px',
-      display:    'flex',
-      gap:        '10px',
-      padding:    '16px 20px 32px',
-      background: '#fff',
-      boxShadow:  '0 -4px 24px rgba(10,47,110,0.08)',
-    },
-    btnCall: {
-      flex:         '1',
-      padding:      '16px',
-      borderRadius: '14px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '15px',
-      fontWeight:   '800',
-      cursor:       'pointer',
-      background:   '#0A2F6E',
-      color:        '#fff',
-    },
-    btnBook: {
-      flex:         '1',
-      padding:      '16px',
-      borderRadius: '14px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '15px',
-      fontWeight:   '800',
-      cursor:       'pointer',
-      background:   '#00C896',
-      color:        '#fff',
-    },
+  const parseList = (val) => {
+    if (!val) return [];
+    try { return JSON.parse(val); } catch { return val.split(',').map(s => s.trim()).filter(Boolean); }
   };
+
+  const education = parseList(doc.education);
+  const languages = parseList(doc.languages);
 
   return (
-    <div style={styles.screen}>
+    <div style={{
+      position: 'fixed', inset: '0', maxWidth: '420px', margin: '0 auto',
+      display: 'flex', flexDirection: 'column', background: '#F4F8FF',
+    }}>
+      <TopBar title="Doctor Profile" goBack={goBack} dark />
 
-      {/* Hero */}
-      <div style={styles.hero}>
-        <div style={styles.heroBg}/>
+      <div style={{ flex: '1', overflowY: 'auto' }}>
 
-        {/* Back button */}
-        <button style={styles.backBtn} onClick={goBack}>←</button>
-
-        {/* Avatar */}
-        <div style={styles.ava}>{doc.emoji}</div>
-
-        {/* Name & degree */}
-        <div style={styles.docName}>{doc.name}</div>
-        <div style={styles.docDegree}>
-          {doc.degree} — {doc.spec}
+        {/* Hero */}
+        <div style={{ background: 'linear-gradient(135deg,#0A2F6E,#0D3B8A)', padding: '20px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+          <div style={{
+            width: '72px', height: '72px', borderRadius: '20px',
+            background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', fontSize: '36px', border: '2px solid rgba(255,255,255,0.2)', flexShrink: '0',
+          }}>
+            {getAvatar(doc.full_name)}
+          </div>
+          <div style={{ flex: '1', minWidth: '0' }}>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '18px', fontWeight: '800', color: '#fff' }}>
+              Dr. {doc.full_name}
+            </div>
+            <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', marginTop: '3px' }}>
+              {doc.specialty || 'General Physician'}
+            </div>
+            {doc.city && <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.55)', marginTop: '2px' }}>📍 {doc.city}</div>}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+              {doc.experience && <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>🏅 {doc.experience} yrs exp</span>}
+              {languages.length > 0 && <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)' }}>🌐 {languages.join(', ')}</span>}
+            </div>
+            <div style={{ marginTop: '8px', display: 'inline-block', background: '#00C896', borderRadius: '50px', padding: '2px 10px', fontSize: '11px', fontWeight: '700', color: '#fff' }}>
+              🟢 Available Now
+            </div>
+          </div>
         </div>
-
-        {/* Verified badge */}
-        <div style={styles.verifiedBadge}>✅ Verified Doctor</div>
 
         {/* Stats */}
-        <div style={styles.numsRow}>
-          <div style={styles.numItem}>
-            <div style={styles.numVal}>{doc.rating}⭐</div>
-            <div style={styles.numLbl}>Rating</div>
-          </div>
-          <div style={styles.numItem}>
-            <div style={styles.numVal}>{doc.patients}</div>
-            <div style={styles.numLbl}>Patients</div>
-          </div>
-          <div style={styles.numItem}>
-            <div style={styles.numVal}>{doc.exp}</div>
-            <div style={styles.numLbl}>Experience</div>
-          </div>
-          <div style={styles.numItem}>
-            <div style={styles.numVal}>
-              {doc.online ? '🟢' : '🔴'}
-            </div>
-            <div style={styles.numLbl}>
-              {doc.online ? 'Online' : 'Offline'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={styles.body}>
-
-        {/* About */}
-        <div style={styles.section}>
-          <div style={styles.secTitle}>About</div>
-          <div style={styles.about}>
-            Specialist in {doc.spec} with {doc.exp} of
-            experience. Treats a wide range of conditions
-            with compassionate and patient-centred care.
-            Available in {doc.langs?.join(', ')}.
-          </div>
-        </div>
-
-        {/* Details */}
-        <div style={styles.section}>
-          <div style={styles.secTitle}>Details</div>
+        <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid #EEF2FF' }}>
           {[
-            { icon: '🏥', label: 'Hospital',          val: 'Apollo Clinic, Chennai'      },
-            { icon: '🌐', label: 'Languages',          val: doc.langs?.join(', ')         },
-            { icon: '💬', label: 'Consultation Fee',   val: doc.fee                       },
-            { icon: '📍', label: 'Location',           val: 'Chennai, Tamil Nadu'         },
-          ].map((item, i) => (
-            <div key={i} style={styles.infoRow}>
-              <div style={styles.infoIcon}>{item.icon}</div>
-              <div>
-                <div style={styles.infoLabel}>{item.label}</div>
-                <div style={styles.infoVal}>{item.val}</div>
-              </div>
+            { label: 'Experience', value: doc.experience ? doc.experience + ' yrs' : 'N/A' },
+            { label: 'Consult Fee', value: doc.consultation_fee ? '₹' + doc.consultation_fee : 'Free' },
+            { label: 'Specialty', value: (doc.specialty || 'General').split(' ')[0] },
+          ].map((s, i) => (
+            <div key={i} style={{ flex: '1', padding: '14px 8px', textAlign: 'center', borderRight: i < 2 ? '1px solid #EEF2FF' : 'none' }}>
+              <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '15px', fontWeight: '800', color: '#0A2F6E' }}>{s.value}</div>
+              <div style={{ fontSize: '11px', color: '#9BA8C9', marginTop: '2px' }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Time slots */}
-        <div style={styles.section}>
-          <div style={styles.secTitle}>
-            Available Slots — Today
-          </div>
-          <div style={styles.slotsGrid}>
-            {slots.map((s, i) => (
-              <div
-                key={i}
-                style={
-                  s.full
-                    ? styles.slotFull
-                    : selectedSlot === s.time
-                    ? styles.slotActive
-                    : styles.slot
-                }
-                onClick={() => {
-                  if (!s.full) setSelectedSlot(s.time);
-                }}
-              >
-                {s.full ? `🔴 ${s.time}` : s.time}
-              </div>
-            ))}
-          </div>
+        {/* Tabs */}
+        <div style={{ display: 'flex', background: '#fff', borderBottom: '1px solid #EEF2FF' }}>
+          {[{ id: 'about', label: '📋 About' }, { id: 'contact', label: '📞 Contact' }].map(t => (
+            <div key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: '1', padding: '12px', textAlign: 'center', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+              color: tab === t.id ? '#0A2F6E' : '#9BA8C9',
+              borderBottom: tab === t.id ? '2px solid #0A2F6E' : '2px solid transparent',
+            }}>
+              {t.label}
+            </div>
+          ))}
         </div>
 
+        <div style={{ padding: '16px' }}>
+
+          {tab === 'about' && (
+            <>
+              {doc.bio && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: '800', fontSize: '14px', color: '#0D1B3E', marginBottom: '8px' }}>About</div>
+                  <p style={{ fontSize: '14px', lineHeight: '1.7', color: '#5A6A8A', margin: '0' }}>{doc.bio}</p>
+                </div>
+              )}
+
+              {education.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: '800', fontSize: '14px', color: '#0D1B3E', marginBottom: '8px' }}>🎓 Education</div>
+                  {education.map((e, i) => (
+                    <div key={i} style={{ fontSize: '13px', color: '#5A6A8A', padding: '8px 0', borderBottom: '1px solid #EEF2FF' }}>• {e}</div>
+                  ))}
+                </div>
+              )}
+
+              {languages.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: '800', fontSize: '14px', color: '#0D1B3E', marginBottom: '8px' }}>🌐 Languages</div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {languages.map((l, i) => (
+                      <div key={i} style={{ background: '#EEF2FF', borderRadius: '50px', padding: '5px 14px', fontSize: '12px', fontWeight: '700', color: '#0A2F6E' }}>{l}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!doc.bio && education.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '24px', color: '#9BA8C9', fontSize: '13px', background: '#fff', borderRadius: '14px' }}>
+                  👨‍⚕️ Dr. {doc.full_name} hasn't filled profile details yet.
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === 'contact' && (
+            <>
+              {[
+                { label: 'PHONE', value: doc.phone, icon: '📞' },
+                { label: 'EMAIL', value: doc.email, icon: '✉️' },
+                { label: 'LOCATION', value: doc.city, icon: '📍' },
+              ].filter(r => r.value).map((r, i) => (
+                <div key={i} style={{ background: '#fff', borderRadius: '14px', padding: '16px', marginBottom: '10px', boxShadow: '0 2px 8px rgba(10,47,110,0.06)' }}>
+                  <div style={{ fontSize: '11px', color: '#9BA8C9', fontWeight: '700', marginBottom: '4px' }}>{r.label}</div>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: '#0D1B3E' }}>{r.icon} {r.value}</div>
+                </div>
+              ))}
+              {!doc.phone && !doc.email && !doc.city && (
+                <div style={{ textAlign: 'center', padding: '24px', color: '#9BA8C9', fontSize: '13px' }}>No contact info available yet.</div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Bottom buttons */}
-      <div style={styles.btnsRow}>
+      {/* Book button */}
+      <div style={{ padding: '12px 16px', background: '#fff', borderTop: '1px solid #EEF2FF' }}>
         <button
-          style={styles.btnCall}
-          onClick={() =>
-            showToast(`📞 Connecting to ${doc.name}...`)
-          }
+          onClick={() => showToast && showToast('📹 Video consultation coming soon!')}
+          style={{
+            width: '100%', padding: '16px', background: '#0A2F6E', color: '#fff',
+            border: 'none', borderRadius: '14px', fontFamily: "'Syne',sans-serif",
+            fontSize: '16px', fontWeight: '800', cursor: 'pointer',
+          }}
         >
-          📞 Call Now
-        </button>
-        <button
-          style={styles.btnBook}
-          onClick={() =>
-            showToast(
-              `📅 Appointment booked for ${selectedSlot}!`
-            )
-          }
-        >
-          📅 Book Slot
+          💬 Book Consultation{doc.consultation_fee ? ' — ₹' + doc.consultation_fee : ''}
         </button>
       </div>
-
     </div>
   );
 }

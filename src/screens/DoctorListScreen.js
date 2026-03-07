@@ -1,438 +1,191 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 import BottomNav from '../components/BottomNav';
 
-const DOCTORS = [
-  {
-    id:       1,
-    name:     'Dr. Ramesh Kumar',
-    degree:   'MBBS, MD',
-    spec:     'General Physician',
-    emoji:    '👨‍⚕️',
-    rating:   4.8,
-    patients: '2,400',
-    exp:      '12 yrs',
-    fee:      '₹200',
-    online:   true,
-    langs:    ['Tamil', 'English', 'Hindi'],
-    category: 'general',
-  },
-  {
-    id:       2,
-    name:     'Dr. Priya Sharma',
-    degree:   'MBBS, DCH',
-    spec:     'Paediatrician',
-    emoji:    '👩‍⚕️',
-    rating:   4.9,
-    patients: '1,800',
-    exp:      '8 yrs',
-    fee:      '₹250',
-    online:   true,
-    langs:    ['Tamil', 'English', 'Telugu'],
-    category: 'child',
-  },
-  {
-    id:       3,
-    name:     'Dr. John Thomas',
-    degree:   'MBBS, DM',
-    spec:     'Cardiologist',
-    emoji:    '👨‍⚕️',
-    rating:   4.7,
-    patients: '3,100',
-    exp:      '15 yrs',
-    fee:      '₹500',
-    online:   false,
-    langs:    ['English', 'Malayalam'],
-    category: 'cardio',
-  },
-  {
-    id:       4,
-    name:     'Dr. Meena Devi',
-    degree:   'MBBS, DVD',
-    spec:     'Dermatologist',
-    emoji:    '👩‍⚕️',
-    rating:   4.6,
-    patients: '1,200',
-    exp:      '6 yrs',
-    fee:      '₹300',
-    online:   true,
-    langs:    ['Tamil', 'English'],
-    category: 'skin',
-  },
-  {
-    id:       5,
-    name:     'Dr. Suresh Babu',
-    degree:   'MBBS, MS',
-    spec:     'Orthopaedic',
-    emoji:    '👨‍⚕️',
-    rating:   4.5,
-    patients: '980',
-    exp:      '10 yrs',
-    fee:      '₹400',
-    online:   false,
-    langs:    ['Tamil', 'English'],
-    category: 'ortho',
-  },
-];
+export default function DoctorListScreen({ navigate, openDoctor }) {
 
-const FILTERS = [
-  { id: 'all',     icon: '🌟', label: 'All'       },
-  { id: 'general', icon: '🩺', label: 'General'   },
-  { id: 'cardio',  icon: '❤️', label: 'Cardio'    },
-  { id: 'child',   icon: '👶', label: 'Child'      },
-  { id: 'skin',    icon: '✨', label: 'Skin'       },
-  { id: 'ortho',   icon: '🦴', label: 'Ortho'     },
-];
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch]   = useState('');
+  const [filter, setFilter]   = useState('all');
 
-export default function DoctorListScreen({
-  navigate,
-  showToast,
-  openDoctor,
-}) {
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('role', 'doctor')
+        .order('created_at', { ascending: false });
+      if (!error && data) setDoctors(data);
+      setLoading(false);
+    };
 
-  const [activeFilter, setActiveFilter] = useState('all');
+    fetchDoctors();
 
-  const filtered = activeFilter === 'all'
-    ? DOCTORS
-    : DOCTORS.filter(d => d.category === activeFilter);
+    // Real-time: new doctor signs up → appears instantly
+    const channel = supabase
+      .channel('doctors-realtime')
+      .on('postgres_changes', {
+        event:  '*',
+        schema: 'public',
+        table:  'profiles',
+        filter: 'role=eq.doctor',
+      }, () => fetchDoctors())
+      .subscribe();
 
-  const styles = {
-    screen: {
-      position:      'fixed',
-      inset:         '0',
-      maxWidth:      '420px',
-      margin:        '0 auto',
-      display:       'flex',
-      flexDirection: 'column',
-      background:    '#F4F8FF',
-    },
-    topBar: {
-      background:  'linear-gradient(135deg, #0A2F6E, #0D3B8A)',
-      padding:     '16px 20px 14px',
-      display:     'flex',
-      alignItems:  'center',
-      gap:         '12px',
-      flexShrink:  '0',
-    },
-    topTitle: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '20px',
-      fontWeight: '800',
-      color:      '#fff',
-      flex:       '1',
-    },
-    avatar: {
-      width:          '40px',
-      height:         '40px',
-      background:     '#00C896',
-      borderRadius:   '50%',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '20px',
-      cursor:         'pointer',
-      border:         '2px solid rgba(255,255,255,0.3)',
-    },
-    // Filter chips
-    filterScroll: {
-      display:   'flex',
-      gap:       '8px',
-      overflowX: 'auto',
-      padding:   '14px 20px',
-      flexShrink:'0',
-      background:'#fff',
-      borderBottom: '1px solid #EEF2FF',
-    },
-    chip: {
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '6px',
-      padding:      '9px 16px',
-      background:   '#F4F8FF',
-      border:       '1.5px solid #D1D8F0',
-      borderRadius: '50px',
-      fontSize:     '13px',
-      fontWeight:   '600',
-      color:        '#5A6A8A',
-      cursor:       'pointer',
-      whiteSpace:   'nowrap',
-      flexShrink:   '0',
-    },
-    chipActive: {
-      display:      'flex',
-      alignItems:   'center',
-      gap:          '6px',
-      padding:      '9px 16px',
-      background:   '#0A2F6E',
-      border:       '1.5px solid #0A2F6E',
-      borderRadius: '50px',
-      fontSize:     '13px',
-      fontWeight:   '600',
-      color:        '#fff',
-      cursor:       'pointer',
-      whiteSpace:   'nowrap',
-      flexShrink:   '0',
-    },
-    // Scroll area
-    scroll: {
-      flex:                    '1',
-      overflowY:               'auto',
-      WebkitOverflowScrolling: 'touch',
-      paddingBottom:           '80px',
-      paddingTop:              '4px',
-    },
-    // Doctor card
-    docCard: {
-      background:   '#fff',
-      borderRadius: '20px',
-      padding:      '18px',
-      margin:       '12px 20px 0',
-      boxShadow:    '0 2px 12px rgba(10,47,110,0.08)',
-      cursor:       'pointer',
-    },
-    cardTop: {
-      display:    'flex',
-      gap:        '14px',
-      alignItems: 'flex-start',
-    },
-    avaWrap: {
-      position:     'relative',
-      flexShrink:   '0',
-    },
-    ava: {
-      width:          '64px',
-      height:         '64px',
-      borderRadius:   '20px',
-      background:     '#EEF2FF',
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'center',
-      fontSize:       '34px',
-    },
-    onlineDot: {
-      position:     'absolute',
-      bottom:       '2px',
-      right:        '2px',
-      width:        '14px',
-      height:       '14px',
-      borderRadius: '50%',
-      border:       '2px solid #fff',
-    },
-    docName: {
-      fontFamily: "'Syne', sans-serif",
-      fontSize:   '16px',
-      fontWeight: '800',
-      color:      '#0A2F6E',
-    },
-    docSpec: {
-      fontSize:  '13px',
-      color:     '#5A6A8A',
-      marginTop: '2px',
-    },
-    verifiedBadge: {
-      display:      'inline-flex',
-      alignItems:   'center',
-      gap:          '4px',
-      background:   'rgba(0,200,150,0.1)',
-      borderRadius: '50px',
-      padding:      '3px 10px',
-      fontSize:     '11px',
-      fontWeight:   '700',
-      color:        '#00A878',
-      marginTop:    '6px',
-    },
-    // Stats row
-    statsRow: {
-      display:       'flex',
-      gap:           '14px',
-      marginTop:     '12px',
-      paddingTop:    '12px',
-      borderTop:     '1px solid #EEF2FF',
-      flexWrap:      'wrap',
-    },
-    stat: {
-      display:    'flex',
-      alignItems: 'center',
-      gap:        '5px',
-      fontSize:   '12px',
-      color:      '#5A6A8A',
-    },
-    // Language tags
-    langsRow: {
-      display:   'flex',
-      gap:       '6px',
-      flexWrap:  'wrap',
-      marginTop: '10px',
-    },
-    langTag: {
-      background:   '#EEF2FF',
-      borderRadius: '6px',
-      padding:      '3px 10px',
-      fontSize:     '11px',
-      fontWeight:   '600',
-      color:        '#5A6A8A',
-    },
-    // Action buttons
-    btnsRow: {
-      display:   'flex',
-      gap:       '8px',
-      marginTop: '12px',
-    },
-    btnCall: {
-      flex:         '1',
-      padding:      '12px',
-      borderRadius: '14px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '14px',
-      fontWeight:   '700',
-      cursor:       'pointer',
-      background:   '#0A2F6E',
-      color:        '#fff',
-    },
-    btnBook: {
-      flex:         '1',
-      padding:      '12px',
-      borderRadius: '14px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '14px',
-      fontWeight:   '700',
-      cursor:       'pointer',
-      background:   '#EEF2FF',
-      color:        '#0A2F6E',
-    },
-    btnBusy: {
-      flex:         '1',
-      padding:      '12px',
-      borderRadius: '14px',
-      border:       'none',
-      fontFamily:   "'Syne', sans-serif",
-      fontSize:     '13px',
-      fontWeight:   '700',
-      cursor:       'not-allowed',
-      background:   '#EEF2FF',
-      color:        '#9BA8C9',
-    },
+    return () => supabase.removeChannel(channel);
+  }, []);
+
+  const specialties = ['all', ...new Set(doctors.map(d => d.specialty).filter(Boolean))];
+
+  const filtered = doctors.filter(d => {
+    const q = search.toLowerCase();
+    const matchSearch = !search ||
+      (d.full_name || '').toLowerCase().includes(q) ||
+      (d.specialty || '').toLowerCase().includes(q) ||
+      (d.city      || '').toLowerCase().includes(q);
+    const matchFilter = filter === 'all' || d.specialty === filter;
+    return matchSearch && matchFilter;
+  });
+
+  const getAvatar = (name) => {
+    const list = ['👨‍⚕️', '👩‍⚕️', '🧑‍⚕️'];
+    return list[(name || '').charCodeAt(0) % list.length];
   };
 
   return (
-    <div style={styles.screen}>
+    <div style={{
+      position: 'fixed', inset: '0', maxWidth: '420px', margin: '0 auto',
+      display: 'flex', flexDirection: 'column', background: '#F4F8FF',
+    }}>
 
-      {/* Top Bar */}
-      <div style={styles.topBar}>
-        <div style={styles.topTitle}>Find Doctors</div>
-        <div
-          style={styles.avatar}
-          onClick={() => navigate('profile')}
-        >
-          😊
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg,#0A2F6E,#0D3B8A)', padding: '20px 16px 16px', flexShrink: '0' }}>
+        <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '20px', fontWeight: '800', color: '#fff', marginBottom: '12px' }}>
+          👨‍⚕️ Find Doctors
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          background: 'rgba(255,255,255,0.12)', borderRadius: '12px',
+          padding: '10px 14px', gap: '8px', border: '1px solid rgba(255,255,255,0.2)',
+        }}>
+          <span>🔍</span>
+          <input
+            style={{ flex: '1', border: 'none', background: 'transparent', fontSize: '14px', outline: 'none', color: '#fff' }}
+            placeholder="Search doctors, specialty, city..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && <span style={{ cursor: 'pointer', color: 'rgba(255,255,255,0.6)' }} onClick={() => setSearch('')}>✕</span>}
         </div>
       </div>
 
-      {/* Filter chips */}
-      <div style={styles.filterScroll}>
-        {FILTERS.map(f => (
-          <div
-            key={f.id}
-            style={activeFilter === f.id ? styles.chipActive : styles.chip}
-            onClick={() => setActiveFilter(f.id)}
-          >
-            <span>{f.icon}</span>
-            <span>{f.label}</span>
+      {/* Specialty chips */}
+      {specialties.length > 1 && (
+        <div style={{
+          display: 'flex', gap: '8px', padding: '10px 16px',
+          overflowX: 'auto', background: '#fff', borderBottom: '1px solid #EEF2FF', flexShrink: '0',
+        }}>
+          {specialties.map(s => (
+            <div key={s} onClick={() => setFilter(s)} style={{
+              background: filter === s ? '#0A2F6E' : '#EEF2FF',
+              color: filter === s ? '#fff' : '#0A2F6E',
+              borderRadius: '50px', padding: '6px 14px',
+              fontSize: '12px', fontWeight: '700', whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: '0',
+            }}>
+              {s === 'all' ? 'All Doctors' : s}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* List */}
+      <div style={{ flex: '1', overflowY: 'auto', padding: '12px 16px' }}>
+
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ fontSize: '40px' }}>⏳</div>
+            <div style={{ fontSize: '14px', color: '#9BA8C9', marginTop: '12px', fontWeight: '600' }}>Loading doctors...</div>
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Doctor list */}
-      <div style={styles.scroll}>
-        {filtered.map(doc => (
-          <div
-            key={doc.id}
-            style={styles.docCard}
-            onClick={() => openDoctor(doc)}
-          >
-            {/* Top row */}
-            <div style={styles.cardTop}>
-              <div style={styles.avaWrap}>
-                <div style={styles.ava}>{doc.emoji}</div>
-                <div style={{
-                  ...styles.onlineDot,
-                  background: doc.online ? '#00C896' : '#9BA8C9',
-                }}/>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={styles.docName}>{doc.name}</div>
-                <div style={styles.docSpec}>
-                  {doc.spec} • {doc.degree}
+        {!loading && doctors.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 24px' }}>
+            <div style={{ fontSize: '64px' }}>🏥</div>
+            <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '18px', fontWeight: '800', color: '#0A2F6E', marginTop: '12px' }}>
+              No Doctors Yet
+            </div>
+            <div style={{ fontSize: '14px', color: '#9BA8C9', lineHeight: '1.6', marginTop: '8px' }}>
+              Doctors will appear here once they sign up.
+            </div>
+            <div style={{ background: '#EEF2FF', borderRadius: '12px', padding: '14px', marginTop: '16px', fontSize: '13px', color: '#5A6A8A', lineHeight: '1.6' }}>
+              💡 Are you a doctor? Sign up with the <strong>Doctor</strong> role to appear here.
+            </div>
+          </div>
+        )}
+
+        {!loading && doctors.length > 0 && filtered.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: '40px' }}>🔍</div>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: '#0A2F6E', marginTop: '12px' }}>No doctors found</div>
+            <div style={{ fontSize: '13px', color: '#9BA8C9', marginTop: '6px' }}>Try a different search or filter</div>
+          </div>
+        )}
+
+        {!loading && filtered.map(doc => (
+          <div key={doc.id} onClick={() => openDoctor && openDoctor(doc)} style={{
+            background: '#fff', borderRadius: '16px', padding: '16px', marginBottom: '12px',
+            boxShadow: '0 2px 12px rgba(10,47,110,0.08)', cursor: 'pointer',
+            display: 'flex', gap: '12px', alignItems: 'flex-start',
+          }}>
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '16px', background: '#EEF2FF',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', flexShrink: '0',
+            }}>
+              {getAvatar(doc.full_name)}
+            </div>
+            <div style={{ flex: '1', minWidth: '0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                <div style={{ fontFamily: "'Syne',sans-serif", fontSize: '15px', fontWeight: '800', color: '#0D1B3E' }}>
+                  Dr. {doc.full_name}
                 </div>
-                <div style={styles.verifiedBadge}>
-                  ✅ Verified Doctor
+                <div style={{ background: '#E8FFF7', color: '#00A878', borderRadius: '50px', padding: '2px 8px', fontSize: '10px', fontWeight: '700', flexShrink: '0' }}>
+                  🟢 Online
                 </div>
               </div>
-            </div>
-
-            {/* Stats */}
-            <div style={styles.statsRow}>
-              <div style={styles.stat}>⭐ {doc.rating}</div>
-              <div style={styles.stat}>👥 {doc.patients} patients</div>
-              <div style={styles.stat}>🕐 {doc.exp} exp</div>
-              <div style={styles.stat}>💬 {doc.fee}</div>
-            </div>
-
-            {/* Languages */}
-            <div style={styles.langsRow}>
-              {doc.langs.map((l, i) => (
-                <span key={i} style={styles.langTag}>{l}</span>
-              ))}
-            </div>
-
-            {/* Buttons */}
-            <div style={styles.btnsRow}>
-              {doc.online ? (
-                <>
-                  <button
-                    style={styles.btnCall}
-                    onClick={e => {
-                      e.stopPropagation();
-                      showToast(`📞 Connecting to ${doc.name}...`);
-                    }}
-                  >
-                    📞 Call Now
-                  </button>
-                  <button
-                    style={styles.btnBook}
-                    onClick={e => {
-                      e.stopPropagation();
-                      openDoctor(doc);
-                    }}
-                  >
-                    📅 Book
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button style={styles.btnBusy} disabled>
-                    ⏳ Currently Unavailable
-                  </button>
-                  <button
-                    style={styles.btnBook}
-                    onClick={e => {
-                      e.stopPropagation();
-                      openDoctor(doc);
-                    }}
-                  >
-                    📅 Book
-                  </button>
-                </>
+              <div style={{ fontSize: '13px', color: '#5A6A8A', marginBottom: '4px' }}>
+                {doc.specialty || 'General Physician'}
+              </div>
+              {(doc.city || doc.experience) && (
+                <div style={{ fontSize: '12px', color: '#9BA8C9', marginBottom: '8px' }}>
+                  {doc.city ? '📍 ' + doc.city : ''}
+                  {doc.city && doc.experience ? '  •  ' : ''}
+                  {doc.experience ? doc.experience + ' yrs exp' : ''}
+                </div>
               )}
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                {doc.consultation_fee && (
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#00A878' }}>
+                    ₹{doc.consultation_fee} / consult
+                  </div>
+                )}
+                <div style={{ marginLeft: 'auto', padding: '7px 14px', background: '#0A2F6E', color: '#fff', borderRadius: '10px', fontSize: '12px', fontWeight: '700' }}>
+                  💬 Consult
+                </div>
+              </div>
             </div>
           </div>
         ))}
+
+        {!loading && filtered.length > 0 && (
+          <div style={{ textAlign: 'center', fontSize: '12px', color: '#9BA8C9', padding: '8px 0 16px' }}>
+            {filtered.length} doctor{filtered.length !== 1 ? 's' : ''} available
+          </div>
+        )}
       </div>
 
-      {/* Bottom Nav */}
       <BottomNav active="doctors" navigate={navigate} />
-
     </div>
   );
 }
