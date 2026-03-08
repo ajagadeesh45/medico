@@ -3,13 +3,16 @@ import translations from './translations';
 
 const LanguageContext = createContext();
 
+const getSavedLang = () => {
+  try { return localStorage.getItem('nadidoc_lang') || 'en'; }
+  catch { return 'en'; }
+};
+
 export function LanguageProvider({ children }) {
-  const [lang, setLang] = useState(
-    localStorage.getItem('nadidoc_lang') || 'en'
-  );
+  const [lang, setLang] = useState(getSavedLang);
 
   const switchLang = (code) => {
-    localStorage.setItem('nadidoc_lang', code);
+    try { localStorage.setItem('nadidoc_lang', code); } catch {}
     setLang(code);
   };
 

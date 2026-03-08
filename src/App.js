@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { LanguageProvider, useLang } from './LanguageContext';
 
-import LanguageSelectScreen from './screens/LanguageSelectScreen';
 import SplashScreen         from './screens/SplashScreen';
 import AuthScreen           from './screens/AuthScreen';
 import HomeScreen           from './screens/HomeScreen';
@@ -16,44 +15,38 @@ import ProfileScreen        from './screens/ProfileScreen';
 import OwnerDashboard       from './screens/OwnerDashboard';
 import VideoCallScreen      from './screens/VideoCallScreen';
 import BookingScreen        from './screens/BookingScreen';
+import LanguagePickerModal  from './components/LanguagePickerModal';
 import Toast                from './components/Toast';
 
 function AppInner() {
   const { lang } = useLang();
 
-  const [screen, setScreen]                 = useState('langSelect');
+  const [screen, setScreen]                 = useState('splash');
   const [history, setHistory]               = useState([]);
   const [user, setUser]                     = useState(null);
   const [toast, setToast]                   = useState({ show: false, msg: '' });
   const [selectedDoctor, setSelectedDoctor] = useState(null);
+  const [showLangPicker, setShowLangPicker] = useState(false);
 
   const routeByRole = (role) => role === 'doctor' ? 'owner' : 'home';
 
-  // Check if language was already selected before
   useEffect(() => {
-    const savedLang = localStorage.getItem('nadidoc_lang');
-    if (savedLang) {
-      // Language already chosen — check auth
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          supabase.from('profiles').select('*').eq('id', session.user.id).single()
-            .then(({ data: profile }) => {
-              const userData = {
-                id:    session.user.id,
-                name:  profile?.full_name || session.user.email.split('@')[0],
-                email: session.user.email,
-                phone: profile?.phone || '',
-                role:  profile?.role  || 'patient',
-              };
-              setUser(userData);
-              setScreen(routeByRole(userData.role));
-            });
-        } else {
-          setScreen('splash');
-        }
-      });
-    }
-    // else stay on langSelect
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          .then(({ data: profile }) => {
+            const userData = {
+              id:    session.user.id,
+              name:  profile?.full_name || session.user.email.split('@')[0],
+              email: session.user.email,
+              phone: profile?.phone || '',
+              role:  profile?.role  || 'patient',
+            };
+            setUser(userData);
+            setScreen(routeByRole(userData.role));
+          });
+      }
+    });
   }, []);
 
   const navigate = (to) => {
@@ -97,6 +90,7 @@ function AppInner() {
     navigate, goBack, showToast,
     user, handleLogin, handleLogout,
     openDoctor, selectedDoctor,
+    openLangPicker: () => setShowLangPicker(true),
     lang,
   };
 
@@ -107,8 +101,12 @@ function AppInner() {
     <div>
       {toast.show && <Toast msg={toast.msg} />}
 
-      {screen === 'langSelect' && (
-        <LanguageSelectScreen onDone={() => setScreen('splash')} />
+      {/* Global language picker modal */}
+      {showLangPicker && (
+        <LanguagePickerModal
+          onClose={() => setShowLangPicker(false)}
+          showToast={showToast}
+        />
       )}
 
       {screen === 'splash'     && <SplashScreen        {...sharedProps} />}
