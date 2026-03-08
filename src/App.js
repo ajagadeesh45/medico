@@ -1,23 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import { LanguageProvider, useLang } from './LanguageContext';
 
-import SplashScreen        from './screens/SplashScreen';
-import AuthScreen          from './screens/AuthScreen';
-import HomeScreen          from './screens/HomeScreen';
-import MapScreen           from './screens/MapScreen';
-import ChatbotScreen       from './screens/ChatbotScreen';
-import DoctorListScreen    from './screens/DoctorListScreen';
-import DoctorProfileScreen from './screens/DoctorProfileScreen';
-import EmergencyScreen     from './screens/EmergencyScreen';
-import RecordsScreen       from './screens/RecordsScreen';
-import ProfileScreen       from './screens/ProfileScreen';
-import OwnerDashboard      from './screens/OwnerDashboard';
-import VideoCallScreen     from './screens/VideoCallScreen';
-import Toast               from './components/Toast';
+import LanguageSelectScreen from './screens/LanguageSelectScreen';
+import SplashScreen         from './screens/SplashScreen';
+import AuthScreen           from './screens/AuthScreen';
+import HomeScreen           from './screens/HomeScreen';
+import MapScreen            from './screens/MapScreen';
+import ChatbotScreen        from './screens/ChatbotScreen';
+import DoctorListScreen     from './screens/DoctorListScreen';
+import DoctorProfileScreen  from './screens/DoctorProfileScreen';
+import EmergencyScreen      from './screens/EmergencyScreen';
+import RecordsScreen        from './screens/RecordsScreen';
+import ProfileScreen        from './screens/ProfileScreen';
+import OwnerDashboard       from './screens/OwnerDashboard';
+import VideoCallScreen      from './screens/VideoCallScreen';
+import BookingScreen        from './screens/BookingScreen';
+import Toast                from './components/Toast';
 
-export default function App() {
+function AppInner() {
+  const { lang } = useLang();
 
-  const [screen, setScreen]                 = useState('splash');
+  const [screen, setScreen]                 = useState('langSelect');
   const [history, setHistory]               = useState([]);
   const [user, setUser]                     = useState(null);
   const [toast, setToast]                   = useState({ show: false, msg: '' });
@@ -25,23 +29,31 @@ export default function App() {
 
   const routeByRole = (role) => role === 'doctor' ? 'owner' : 'home';
 
+  // Check if language was already selected before
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        supabase.from('profiles').select('*').eq('id', session.user.id).single()
-          .then(({ data: profile }) => {
-            const userData = {
-              id:    session.user.id,
-              name:  profile?.full_name || session.user.email.split('@')[0],
-              email: session.user.email,
-              phone: profile?.phone || '',
-              role:  profile?.role  || 'patient',
-            };
-            setUser(userData);
-            setScreen(routeByRole(userData.role));
-          });
-      }
-    });
+    const savedLang = localStorage.getItem('nadidoc_lang');
+    if (savedLang) {
+      // Language already chosen — check auth
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          supabase.from('profiles').select('*').eq('id', session.user.id).single()
+            .then(({ data: profile }) => {
+              const userData = {
+                id:    session.user.id,
+                name:  profile?.full_name || session.user.email.split('@')[0],
+                email: session.user.email,
+                phone: profile?.phone || '',
+                role:  profile?.role  || 'patient',
+              };
+              setUser(userData);
+              setScreen(routeByRole(userData.role));
+            });
+        } else {
+          setScreen('splash');
+        }
+      });
+    }
+    // else stay on langSelect
   }, []);
 
   const navigate = (to) => {
@@ -85,6 +97,7 @@ export default function App() {
     navigate, goBack, showToast,
     user, handleLogin, handleLogout,
     openDoctor, selectedDoctor,
+    lang,
   };
 
   const isDoctor  = user?.role === 'doctor';
@@ -93,6 +106,10 @@ export default function App() {
   return (
     <div>
       {toast.show && <Toast msg={toast.msg} />}
+
+      {screen === 'langSelect' && (
+        <LanguageSelectScreen onDone={() => setScreen('splash')} />
+      )}
 
       {screen === 'splash'     && <SplashScreen        {...sharedProps} />}
       {screen === 'auth'       && <AuthScreen          {...sharedProps} />}
@@ -107,8 +124,9 @@ export default function App() {
       {screen === 'records'    && isPatient && <RecordsScreen       {...sharedProps} />}
       {screen === 'profile'    && isPatient && <ProfileScreen       {...sharedProps} />}
       {screen === 'videoCall'  && isPatient && <VideoCallScreen     {...sharedProps} />}
+      {screen === 'booking'    && isPatient && <BookingScreen       {...sharedProps} />}
 
-      {/* Doctor screen */}
+      {/* Doctor screens */}
       {screen === 'owner'      && isDoctor  && <OwnerDashboard      {...sharedProps} />}
       {screen === 'videoCall'  && isDoctor  && <VideoCallScreen     {...sharedProps} />}
 
@@ -116,5 +134,13 @@ export default function App() {
       {screen === 'owner' && isPatient && (() => { setScreen('home');  return null; })()}
       {screen === 'home'  && isDoctor  && (() => { setScreen('owner'); return null; })()}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppInner />
+    </LanguageProvider>
   );
 }
